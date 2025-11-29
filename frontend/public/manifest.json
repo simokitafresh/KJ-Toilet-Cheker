@@ -1,7 +1,8 @@
 {
-  "name": "KJ Toilet Checker",
-  "short_name": "ToiletCheck",
-  "description": "Toilet check management system",
+  "name": "Toilet Check Capture",
+  "short_name": "ToiletCapture",
+  "description": "Toilet check capture app",
+  "scope": "/capture",
   "start_url": "/capture",
   "display": "standalone",
   "background_color": "#ffffff",
