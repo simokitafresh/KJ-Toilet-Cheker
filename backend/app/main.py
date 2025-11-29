@@ -18,7 +18,8 @@ app = FastAPI(
 # CORS
 origins = [
     "http://localhost:3000", # Next.js local
-    "https://kj-toilet-cheker.onrender.com", # Production (Example)
+    "https://kj-toilet-frontend.onrender.com", # Production Frontend
+    "https://kj-toilet-backend.onrender.com", # Production Backend (Self)
     "*" # Allow all for now for PWA/easy dev
 ]
 

@@ -82,7 +82,13 @@ export default function CapturePage() {
     };
 
     const handleStaffSelect = async (staffId: number) => {
-        if (!selectedToiletId) return;
+        console.log('handleStaffSelect called', { staffId, selectedToiletId, imagesLength: images.length });
+
+        if (!selectedToiletId) {
+            alert('トイレが選択されていません。管理者に連絡してください。');
+            console.error('No toilet selected');
+            return;
+        }
         if (images.length < 2) {
             setError('Please take at least 2 photos');
             setStep('camera');
@@ -107,7 +113,9 @@ export default function CapturePage() {
                 formData.append('images', img);
             });
 
+            console.log('Submitting check...', Object.fromEntries(formData.entries()));
             await api.submitCheck(formData);
+            console.log('Submission successful');
 
             // Success
             alert('記録しました'); // Simple alert as per spec (or toast)
@@ -117,10 +125,11 @@ export default function CapturePage() {
             // If /capture is the main screen for staff, maybe reset state?
             setImages([]);
             setStep('camera');
-            setIsSubmitting(false);
-
         } catch (err) {
-            setError('Failed to submit');
+            console.error('Submission failed', err);
+            setError('送信に失敗しました。もう一度試してください。');
+            alert('送信に失敗しました: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
             setIsSubmitting(false);
         }
     };
@@ -197,6 +206,8 @@ export default function CapturePage() {
                     <div className="text-white text-xl">送信中...</div>
                 </div>
             )}
+
+            {error && <div className="mt-4 text-red-500 flex items-center gap-2 justify-center"><AlertCircle size={16} /> {error}</div>}
 
             <button
                 onClick={() => setStep('camera')}
