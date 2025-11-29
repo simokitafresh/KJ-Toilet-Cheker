@@ -48,4 +48,4 @@ services:
 databases:
   - name: kj-toilet-db
     region: singapore
-    plan: starter
+    plan: basic
