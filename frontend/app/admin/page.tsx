@@ -74,28 +74,28 @@ export default function AdminPage() {
 
     if (!isLoggedIn) {
         return (
-            <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                <form onSubmit={handleLogin} className="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
-                    <h1 className="text-2xl font-bold mb-6 text-center">管理者ログイン</h1>
+            <div className="min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center">
+                <form onSubmit={handleLogin} className="bg-white p-8 rounded-lg shadow-lg w-96 border border-slate-200">
+                    <h1 className="text-2xl font-bold mb-6 text-center text-slate-700">管理者ログイン</h1>
                     <div className="mb-4">
-                        <label className="block text-sm mb-2">ユーザー名</label>
+                        <label className="block text-sm mb-2 text-slate-600">ユーザー名</label>
                         <input
                             type="text"
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600"
+                            className="w-full p-2 rounded bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
                             value={username}
                             onChange={e => setUsername(e.target.value)}
                         />
                     </div>
                     <div className="mb-6">
-                        <label className="block text-sm mb-2">パスワード</label>
+                        <label className="block text-sm mb-2 text-slate-600">パスワード</label>
                         <input
                             type="password"
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600"
+                            className="w-full p-2 rounded bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                         />
                     </div>
-                    <button type="submit" className="w-full bg-blue-600 py-2 rounded font-bold hover:bg-blue-500">
+                    <button type="submit" className="w-full bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-500 transition-colors shadow-sm">
                         ログイン
                     </button>
                 </form>
@@ -104,27 +104,27 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white p-6">
+        <div className="min-h-screen bg-slate-50 text-slate-800 p-6">
             <div className="flex justify-between items-center mb-8">
-                <h1 className="text-2xl font-bold">管理パネル</h1>
-                <button onClick={() => setIsLoggedIn(false)} className="text-gray-400 hover:text-white">ログアウト</button>
+                <h1 className="text-2xl font-bold text-slate-700">管理パネル</h1>
+                <button onClick={() => setIsLoggedIn(false)} className="text-slate-500 hover:text-slate-800 transition-colors">ログアウト</button>
             </div>
 
-            <div className="flex gap-4 mb-6 border-b border-gray-700 pb-2">
+            <div className="flex gap-4 mb-6 border-b border-slate-200 pb-2">
                 <button
-                    className={`px-4 py-2 rounded ${activeTab === 'staff' ? 'bg-blue-600' : 'bg-gray-800'}`}
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'staff' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
                     onClick={() => setActiveTab('staff')}
                 >
                     スタッフ管理
                 </button>
                 <button
-                    className={`px-4 py-2 rounded ${activeTab === 'toilets' ? 'bg-blue-600' : 'bg-gray-800'}`}
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'toilets' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
                     onClick={() => setActiveTab('toilets')}
                 >
                     トイレ管理
                 </button>
                 <button
-                    className={`px-4 py-2 rounded ${activeTab === 'checkpoints' ? 'bg-blue-600' : 'bg-gray-800'}`}
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'checkpoints' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
                     onClick={() => setActiveTab('checkpoints')}
                 >
                     チェックポイント
@@ -135,29 +135,29 @@ export default function AdminPage() {
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <div>
-                            <h2 className="text-xl font-bold">スタッフ管理</h2>
-                            <p className="text-sm text-gray-400 mt-1">
+                            <h2 className="text-xl font-bold text-slate-700">スタッフ管理</h2>
+                            <p className="text-sm text-slate-500 mt-1">
                                 スタッフの追加・削除を行います。アイコンは動物絵文字や👨‍⚕️（医師）、👩‍⚕️（看護師）などが使えます。
                             </p>
                         </div>
-                        <button onClick={handleAddStaff} className="bg-green-600 px-4 py-2 rounded flex items-center gap-2">
+                        <button onClick={handleAddStaff} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
                             <Plus size={16} /> スタッフ追加
                         </button>
                     </div>
                     <div className="grid gap-4">
                         {staffList.map(staff => (
-                            <div key={staff.id} className="bg-gray-800 p-4 rounded flex justify-between items-center">
+                            <div key={staff.id} className="bg-white border border-slate-200 p-4 rounded flex justify-between items-center shadow-sm">
                                 <div className="flex items-center gap-4">
                                     <span className="text-2xl">{staff.icon_code}</span>
                                     <div>
-                                        <div className="font-bold">{staff.internal_name}</div>
-                                        <div className="text-sm text-gray-400">表示順: {staff.display_order}</div>
+                                        <div className="font-bold text-slate-800">{staff.internal_name}</div>
+                                        <div className="text-sm text-slate-400">表示順: {staff.display_order}</div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleDeleteStaff(staff.id)}
-                                        className="p-2 text-red-400 hover:bg-gray-700 rounded"
+                                        className="p-2 text-red-400 hover:bg-red-50 rounded transition-colors"
                                         title="削除"
                                     >
                                         <Trash2 size={16} />
@@ -173,21 +173,21 @@ export default function AdminPage() {
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <div>
-                            <h2 className="text-xl font-bold">トイレ管理</h2>
-                            <p className="text-sm text-gray-400 mt-1">
+                            <h2 className="text-xl font-bold text-slate-700">トイレ管理</h2>
+                            <p className="text-sm text-slate-500 mt-1">
                                 管理対象のトイレを登録します（最大2箇所まで）。
                             </p>
                         </div>
-                        <button onClick={handleAddToilet} className="bg-green-600 px-4 py-2 rounded flex items-center gap-2">
+                        <button onClick={handleAddToilet} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
                             <Plus size={16} /> トイレ追加
                         </button>
                     </div>
                     <div className="grid gap-4">
                         {toilets.map(toilet => (
-                            <div key={toilet.id} className="bg-gray-800 p-4 rounded flex justify-between items-center">
+                            <div key={toilet.id} className="bg-white border border-slate-200 p-4 rounded flex justify-between items-center shadow-sm">
                                 <div>
-                                    <div className="font-bold">{toilet.name}</div>
-                                    <div className="text-sm text-gray-400">{toilet.floor || '階数情報なし'}</div>
+                                    <div className="font-bold text-slate-800">{toilet.name}</div>
+                                    <div className="text-sm text-slate-400">{toilet.floor || '階数情報なし'}</div>
                                 </div>
                             </div>
                         ))}
@@ -198,12 +198,12 @@ export default function AdminPage() {
             {activeTab === 'checkpoints' && (
                 <div>
                     <div className="mb-4">
-                        <h2 className="text-xl font-bold">主要チェックポイント</h2>
-                        <p className="text-sm text-gray-400 mt-1">
+                        <h2 className="text-xl font-bold text-slate-700">主要チェックポイント</h2>
+                        <p className="text-sm text-slate-500 mt-1">
                             特に重要なチェック時間帯の設定です。現在は閲覧のみ可能です。
                         </p>
                     </div>
-                    <pre className="bg-gray-800 p-4 rounded mt-4 text-xs overflow-auto">
+                    <pre className="bg-white border border-slate-200 p-4 rounded mt-4 text-xs overflow-auto text-slate-600 shadow-sm">
                         {JSON.stringify(checkpoints, null, 2)}
                     </pre>
                 </div>

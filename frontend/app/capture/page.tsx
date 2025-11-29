@@ -136,12 +136,12 @@ export default function CapturePage() {
 
     if (step === 'camera') {
         return (
-            <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center justify-center">
-                <h1 className="text-2xl mb-8 font-bold">トイレチェック撮影</h1>
+            <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center">
+                <h1 className="text-2xl mb-8 font-bold text-slate-700">トイレチェック撮影</h1>
 
                 {toilets.length > 1 && (
                     <select
-                        className="mb-4 p-2 bg-gray-800 rounded"
+                        className="mb-4 p-2 bg-white border border-slate-300 rounded shadow-sm text-slate-700"
                         value={selectedToiletId || ''}
                         onChange={(e) => setSelectedToiletId(Number(e.target.value))}
                     >
@@ -152,11 +152,11 @@ export default function CapturePage() {
                 )}
 
                 <div className="mb-4 text-center">
-                    <p>現在: {images.length}枚</p>
-                    {images.length < 2 && <p className="text-red-400 text-sm">最低2枚必要です</p>}
+                    <p className="text-slate-600">現在: {images.length}枚</p>
+                    {images.length < 2 && <p className="text-red-500 text-sm">最低2枚必要です</p>}
                 </div>
 
-                <label className="w-64 h-64 bg-blue-600 rounded-full flex items-center justify-center cursor-pointer shadow-lg active:scale-95 transition-transform">
+                <label className="w-64 h-64 bg-teal-600 rounded-full flex items-center justify-center cursor-pointer shadow-lg active:scale-95 transition-transform hover:bg-teal-500 text-white">
                     <Camera size={64} />
                     <input
                         type="file"
@@ -168,12 +168,12 @@ export default function CapturePage() {
                     />
                 </label>
 
-                <p className="mt-4 text-gray-400">タップして撮影（連続可）</p>
+                <p className="mt-4 text-slate-500">タップして撮影（連続可）</p>
 
                 {images.length >= 2 && (
                     <button
                         onClick={() => setStep('staff')}
-                        className="mt-8 px-8 py-3 bg-green-600 rounded-lg font-bold flex items-center gap-2"
+                        className="mt-8 px-8 py-3 bg-teal-600 text-white rounded-lg font-bold flex items-center gap-2 shadow-md hover:bg-teal-500 transition-colors"
                     >
                         次へ進む <Check />
                     </button>
@@ -185,8 +185,8 @@ export default function CapturePage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white p-4">
-            <h2 className="text-xl text-center mb-6">担当者を選択してください</h2>
+        <div className="min-h-screen bg-slate-50 text-slate-800 p-4">
+            <h2 className="text-xl text-center mb-6 text-slate-700">担当者を選択してください</h2>
 
             <div className="grid grid-cols-4 gap-4">
                 {staffList.map(staff => (
@@ -194,7 +194,7 @@ export default function CapturePage() {
                         key={staff.id}
                         onClick={() => handleStaffSelect(staff.id)}
                         disabled={isSubmitting}
-                        className="aspect-square bg-gray-800 rounded-xl text-4xl flex items-center justify-center hover:bg-gray-700 active:bg-gray-600 transition-colors"
+                        className="aspect-square bg-white border border-slate-200 rounded-xl text-4xl flex items-center justify-center hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-sm"
                     >
                         {staff.icon_code}
                     </button>
@@ -202,8 +202,11 @@ export default function CapturePage() {
             </div>
 
             {isSubmitting && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="text-white text-xl">送信中...</div>
+                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600 mb-4"></div>
+                        <div className="text-slate-700 text-xl">送信中...</div>
+                    </div>
                 </div>
             )}
 
@@ -211,7 +214,7 @@ export default function CapturePage() {
 
             <button
                 onClick={() => setStep('camera')}
-                className="mt-8 w-full py-3 bg-gray-700 rounded-lg"
+                className="mt-8 w-full py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
             >
                 戻る
             </button>

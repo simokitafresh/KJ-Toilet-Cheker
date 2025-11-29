@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 from typing import List, Optional
 from datetime import datetime, date, time, timedelta
+import os
 from app.api import deps
+from app.core.config import settings
 from app.models import ToiletCheck, MajorCheckpoint, Toilet, Staff, CheckImage
 from app.schemas import DashboardDayResponse, MajorCheckpointStatus, RealtimeAlert, TimelineItem
 

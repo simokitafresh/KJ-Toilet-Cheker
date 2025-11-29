@@ -36,26 +36,26 @@ export default function InstallPrompt() {
     if (!isVisible) return null;
 
     return (
-        <div className="fixed bottom-4 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg flex items-center justify-between z-50 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed bottom-4 left-4 right-4 bg-white text-slate-800 p-4 rounded-lg shadow-xl border border-slate-200 flex items-center justify-between z-50 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-full">
+                <div className="bg-teal-50 p-2 rounded-full text-teal-600">
                     <Download size={24} />
                 </div>
                 <div>
-                    <p className="font-bold">アプリをインストール</p>
-                    <p className="text-sm text-blue-100">ホーム画面に追加して素早くアクセス</p>
+                    <p className="font-bold text-slate-800">アプリをインストール</p>
+                    <p className="text-sm text-slate-500">ホーム画面に追加して素早くアクセス</p>
                 </div>
             </div>
             <div className="flex items-center gap-2">
                 <button
                     onClick={() => setIsVisible(false)}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                    className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
                 >
                     <X size={20} />
                 </button>
                 <button
                     onClick={handleInstall}
-                    className="bg-white text-blue-600 px-4 py-2 rounded-lg font-bold hover:bg-blue-50 transition-colors"
+                    className="bg-teal-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-teal-500 transition-colors shadow-sm"
                 >
                     インストール
                 </button>
