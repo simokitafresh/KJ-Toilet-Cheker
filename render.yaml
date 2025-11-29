@@ -24,6 +24,8 @@ services:
         generateValue: true
       - key: IMAGE_STORAGE_PATH
         value: /var/data/toilet-images
+      - key: PYTHON_VERSION
+        value: 3.11.9
     disk:
       name: toilet-images
       mountPath: /var/data/toilet-images
