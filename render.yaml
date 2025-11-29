@@ -44,7 +44,7 @@ services:
     staticPublishPath: frontend/out
     envVars:
       - key: NEXT_PUBLIC_API_HOST
-        value: https://kj-toilet-backend.onrender.com # Update this after backend deployment
+        value: https://kj-toilet-backend.onrender.com
 
 
 databases:

@@ -27,7 +27,7 @@
 
 ### ログイン方法
 
-1. ブラウザで `https://[配布されたURL]/admin` にアクセス
+1. ブラウザで `https://kj-toilet-frontend.onrender.com/admin` にアクセス
 2. ユーザー名とパスワードを入力
 3. 「Login」をクリック
 
