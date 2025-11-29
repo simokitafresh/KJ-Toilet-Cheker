@@ -48,7 +48,8 @@ def create_check(
         .order_by(desc(ToiletCheck.checked_at))\
         .first()
 
-    current_time = datetime.now()
+    from datetime import timezone
+    current_time = datetime.now(timezone.utc)
     interval_sec = None
     status_type = "NORMAL"
 

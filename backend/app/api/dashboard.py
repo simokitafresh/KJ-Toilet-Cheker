@@ -32,7 +32,8 @@ def get_dashboard_day(
         day_checks_query = day_checks_query.filter(ToiletCheck.toilet_id == toilet_id)
     day_checks = day_checks_query.all()
 
-    current_dt = datetime.now()
+    from datetime import timezone
+    current_dt = datetime.now(timezone.utc)
     is_today = target_date == current_dt.date()
 
     for cp in major_checkpoints:
