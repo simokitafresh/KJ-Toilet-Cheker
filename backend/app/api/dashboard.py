@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 from typing import List, Optional
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 import os
 from app.api import deps
 from app.core.config import settings
@@ -32,7 +32,6 @@ def get_dashboard_day(
         day_checks_query = day_checks_query.filter(ToiletCheck.toilet_id == toilet_id)
     day_checks = day_checks_query.all()
 
-    from datetime import timezone
     current_dt = datetime.now(timezone.utc)
     is_today = target_date == current_dt.date()
 
@@ -103,7 +102,10 @@ def get_dashboard_day(
             
             elapsed_minutes = 0
             if last_check:
-                delta = current_dt - last_check.checked_at
+                last_at = last_check.checked_at
+                if last_at.tzinfo is None:
+                    last_at = last_at.replace(tzinfo=timezone.utc)
+                delta = current_dt - last_at
                 elapsed_minutes = int(delta.total_seconds() / 60)
             else:
                 # No check ever? Or just today? 
