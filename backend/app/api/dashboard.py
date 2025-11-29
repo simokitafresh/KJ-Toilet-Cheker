@@ -35,28 +35,29 @@ def get_dashboard_day(
     current_dt = datetime.now(timezone.utc)
     is_today = target_date == current_dt.date()
 
+    # Define JST
+    JST = timezone(timedelta(hours=9))
+
     for cp in major_checkpoints:
         # Filter checks within this checkpoint's time window
         # Note: This simple logic assumes time window is within the same day
         
-        # Convert time to datetime for comparison
-        start_dt = datetime.combine(target_date, cp.start_time)
-        end_dt = datetime.combine(target_date, cp.end_time)
+        # Convert time to datetime for comparison (Assume CP times are JST)
+        start_dt = datetime.combine(target_date, cp.start_time).replace(tzinfo=JST)
+        end_dt = datetime.combine(target_date, cp.end_time).replace(tzinfo=JST)
         
         matched_check = None
         for check in day_checks:
             # Check if check is within window
-            # If toilet_id is specified in CP, filter by it. If CP.target_toilet_id is None, it applies to all (or any).
-            # Logic: If CP targets specific toilet, only checks for that toilet count.
-            # If CP targets ALL (None), any check counts? Or do we need checks for ALL toilets?
-            # Spec says: "target_toilet_id: NULL=All toilets". 
-            # Let's assume for Dashboard Day View (which might be filtered by toilet_id), 
-            # if we are viewing a specific toilet, we only care about CPs for that toilet or ALL.
-            
             if cp.target_toilet_id and cp.target_toilet_id != check.toilet_id:
                 continue
             
-            if start_dt <= check.checked_at <= end_dt:
+            # Ensure check.checked_at is aware (UTC)
+            check_at = check.checked_at
+            if check_at.tzinfo is None:
+                check_at = check_at.replace(tzinfo=timezone.utc)
+            
+            if start_dt <= check_at <= end_dt:
                 matched_check = check
                 break
         
