@@ -78,9 +78,7 @@ def create_check(
         else:
             # First check ever
             status_type = "NORMAL"
-    else:
-        # First check ever
-        status_type = "NORMAL"
+
 
         # 3. Create Check Record
         new_check = ToiletCheck(
