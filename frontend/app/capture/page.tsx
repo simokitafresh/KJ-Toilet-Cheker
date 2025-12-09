@@ -61,7 +61,7 @@ export default function CapturePage() {
                     setSelectedToiletId(toiletData[0].id);
                 }
             })
-            .catch(err => setError('Failed to load data'));
+            .catch(err => setError('データの読み込みに失敗しました'));
     }, []);
 
     // カメラステップの時にカメラを起動
@@ -102,8 +102,6 @@ export default function CapturePage() {
     };
 
     const handleStaffSelect = async (staffId: number) => {
-        console.log('handleStaffSelect called', { staffId, selectedToiletId, imagesLength: images.length });
-
         if (!selectedToiletId) {
             alert('トイレが選択されていません。管理者に連絡してください。');
             console.error('No toilet selected');
@@ -133,9 +131,7 @@ export default function CapturePage() {
                 formData.append('images', img);
             });
 
-            console.log('Submitting check...', Object.fromEntries(formData.entries()));
             await api.submitCheck(formData);
-            console.log('Submission successful');
 
             // Success
             alert('記録しました'); // Simple alert as per spec (or toast)
@@ -146,9 +142,8 @@ export default function CapturePage() {
             setImages([]);
             setStep('camera');
         } catch (err) {
-            console.error('Submission failed', err);
-            setError('送信に失敗しました。もう一度試してください。');
-            alert('送信に失敗しました: ' + (err instanceof Error ? err.message : String(err)));
+            const message = err instanceof Error ? err.message : '不明なエラー';
+            setError(`送信に失敗しました: ${message}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -156,20 +151,20 @@ export default function CapturePage() {
 
     if (step === 'camera') {
         return (
-            <div className="min-h-screen bg-black text-white flex flex-col">
-                {/* ヘッダー */}
-                <div className="bg-slate-900 p-4 flex items-center justify-between">
-                    <h1 className="text-lg font-bold">トイレチェック撮影</h1>
+            <div className="h-screen bg-slate-50 text-slate-800 flex flex-col overflow-hidden">
+                {/* ヘッダー - 固定高さ */}
+                <div className="flex-shrink-0 bg-teal-600 p-3 flex items-center justify-between text-white">
+                    <h1 className="text-base font-bold">トイレチェック撮影</h1>
                     <div className="text-right">
-                        <span className="text-2xl font-bold text-teal-400">{images.length}</span>
-                        <span className="text-slate-400">/2枚</span>
+                        <span className="text-2xl font-bold">{images.length}</span>
+                        <span className="text-teal-100">/2枚</span>
                     </div>
                 </div>
 
                 {toilets.length > 1 && (
-                    <div className="bg-slate-900 px-4 pb-2">
+                    <div className="flex-shrink-0 bg-white px-4 py-2 border-b border-slate-200">
                         <select
-                            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-white"
+                            className="w-full p-2 bg-white border border-slate-300 rounded text-slate-800"
                             value={selectedToiletId || ''}
                             onChange={(e) => setSelectedToiletId(Number(e.target.value))}
                         >
@@ -180,15 +175,15 @@ export default function CapturePage() {
                     </div>
                 )}
 
-                {/* カメラプレビュー */}
-                <div className="flex-1 relative bg-black flex items-center justify-center">
+                {/* カメラプレビュー - 残りスペースを使用 */}
+                <div className="flex-1 min-h-0 relative bg-slate-200 flex items-center justify-center">
                     {cameraError ? (
                         <div className="text-center p-4">
                             <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
-                            <p className="text-red-400">{cameraError}</p>
+                            <p className="text-red-600">{cameraError}</p>
                             <button 
                                 onClick={startCamera}
-                                className="mt-4 px-4 py-2 bg-teal-600 rounded"
+                                className="mt-4 px-4 py-2 bg-teal-600 text-white rounded"
                             >
                                 再試行
                             </button>
@@ -199,31 +194,32 @@ export default function CapturePage() {
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain bg-slate-800"
                         />
                     )}
 
                     {/* 撮影枚数オーバーレイ */}
                     {images.length === 1 && (
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-2 rounded-full font-bold">
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-900 px-4 py-2 rounded-full font-bold shadow-md">
                             あと1枚！
                         </div>
                     )}
                 </div>
 
-                {/* シャッターボタン */}
-                <div className="bg-slate-900 p-6 flex justify-center">
+                {/* シャッターボタン - 固定高さ、常に表示 */}
+                <div className="flex-shrink-0 bg-white p-4 flex justify-center border-t border-slate-200 safe-area-bottom">
                     <button
                         onClick={capturePhoto}
                         disabled={!cameraReady}
-                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-500"
+                        style={{ width: '72px', height: '72px' }}
                     >
-                        <div className="w-16 h-16 bg-white border-4 border-slate-900 rounded-full" />
+                        <div className="bg-white rounded-full" style={{ width: '56px', height: '56px' }} />
                     </button>
                 </div>
 
                 {error && (
-                    <div className="bg-red-500 p-3 text-center">
+                    <div className="flex-shrink-0 bg-red-100 border-t border-red-300 p-3 text-center text-red-700">
                         <AlertCircle size={16} className="inline mr-2" />
                         {error}
                     </div>
@@ -237,7 +233,7 @@ export default function CapturePage() {
             <h2 className="text-xl text-center mb-6 text-slate-700">担当者を選択してください</h2>
 
             <div className="grid grid-cols-4 gap-4">
-                {staffList.map(staff => (
+                {staffList.filter(s => s.is_active !== false).map(staff => (
                     <button
                         key={staff.id}
                         onClick={() => handleStaffSelect(staff.id)}

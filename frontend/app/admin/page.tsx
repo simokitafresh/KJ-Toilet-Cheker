@@ -2,66 +2,118 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Staff, Toilet, MajorCheckpoint } from '@/lib/types';
-import { Trash2, Plus, Save, Edit, X, Settings } from 'lucide-react';
+import { Staff, Toilet } from '@/lib/types';
+import { Trash2, Plus, Edit, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 
 export default function AdminPage() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [creds, setCreds] = useState('');
-    const [activeTab, setActiveTab] = useState<'staff' | 'toilets' | 'checkpoints' | 'settings'>('staff');
+    const [activeTab, setActiveTab] = useState<'staff' | 'toilets'>('staff');
 
     // Data
     const [staffList, setStaffList] = useState<Staff[]>([]);
+    const [inactiveStaffList, setInactiveStaffList] = useState<Staff[]>([]);
+    const [showInactive, setShowInactive] = useState(false);
     const [toilets, setToilets] = useState<Toilet[]>([]);
-    const [checkpoints, setCheckpoints] = useState<MajorCheckpoint[]>([]);
-    const [settings, setSettings] = useState<{ key: string, value: string }[]>([]);
 
-    // Modal State
-    const [isCpModalOpen, setIsCpModalOpen] = useState(false);
-    const [editingCp, setEditingCp] = useState<Partial<MajorCheckpoint>>({});
+    // Staff Modal State
+    const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+    const [editingStaff, setEditingStaff] = useState<Partial<Staff> & { isNew?: boolean }>({});
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         const c = btoa(`${username}:${password}`);
         setCreds(c);
-        // Verify creds by fetching staff
         api.admin.getStaff(c)
             .then(res => {
                 setIsLoggedIn(true);
-                setStaffList(res);
+                setStaffList(res.filter(s => s.is_active !== false));
+                setInactiveStaffList(res.filter(s => s.is_active === false));
             })
-            .catch(() => alert('Login failed'));
+            .catch(() => alert('ログインに失敗しました'));
     };
 
     useEffect(() => {
         if (isLoggedIn) {
             if (activeTab === 'staff') loadStaff();
             if (activeTab === 'toilets') loadToilets();
-            if (activeTab === 'checkpoints') loadCheckpoints();
-            if (activeTab === 'settings') loadSettings();
         }
     }, [isLoggedIn, activeTab]);
 
-    const loadStaff = () => api.admin.getStaff(creds).then(setStaffList);
+    const loadStaff = async () => {
+        const res = await api.admin.getStaff(creds, true);
+        setStaffList(res.filter((s: Staff) => s.is_active !== false));
+        setInactiveStaffList(res.filter((s: Staff) => s.is_active === false));
+    };
     const loadToilets = () => api.admin.getToilets(creds).then(setToilets);
-    const loadCheckpoints = () => api.admin.getMajorCheckpoints(creds).then(setCheckpoints);
-    const loadSettings = () => api.admin.getSettings(creds).then(setSettings);
 
     // Staff Actions
-    const handleAddStaff = async () => {
-        const name = prompt('名前（内部管理用）を入力してください:');
-        const icon = prompt('アイコン（絵文字）を入力してください (例: 🐶, 👨‍⚕️):');
-        if (name && icon) {
-            await api.admin.createStaff(creds, { internal_name: name, icon_code: icon });
+    const openStaffModal = (staff?: Staff) => {
+        if (staff) {
+            setEditingStaff({ ...staff });
+        } else {
+            setEditingStaff({ internal_name: '', icon_code: '', isNew: true });
+        }
+        setIsStaffModalOpen(true);
+    };
+
+    const saveStaff = async () => {
+        if (!editingStaff.internal_name || !editingStaff.icon_code) {
+            alert('名前とアイコンを入力してください');
+            return;
+        }
+
+        try {
+            if (editingStaff.isNew) {
+                await api.admin.createStaff(creds, {
+                    internal_name: editingStaff.internal_name,
+                    icon_code: editingStaff.icon_code
+                });
+            } else if (editingStaff.id) {
+                await api.admin.updateStaff(creds, editingStaff.id, {
+                    internal_name: editingStaff.internal_name,
+                    icon_code: editingStaff.icon_code
+                });
+            }
+            setIsStaffModalOpen(false);
+            loadStaff();
+        } catch (e) {
+            alert('保存に失敗しました');
+        }
+    };
+
+    const deleteStaff = async (id: number) => {
+        if (confirm('このスタッフを削除しますか？（後から復元できます）')) {
+            await api.admin.deleteStaff(creds, id);
             loadStaff();
         }
     };
 
-    const handleDeleteStaff = async (id: number) => {
-        if (confirm('本当に削除しますか？')) {
-            await api.admin.deleteStaff(creds, id);
+    const restoreStaff = async (id: number) => {
+        try {
+            await api.admin.updateStaff(creds, id, { is_active: true });
+            loadStaff();
+        } catch (e) {
+            alert('復元に失敗しました');
+        }
+    };
+
+    const moveStaff = async (index: number, direction: 'up' | 'down') => {
+        const newList = [...staffList];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        
+        if (targetIndex < 0 || targetIndex >= newList.length) return;
+
+        [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
+        
+        const staffIds = newList.map(s => s.id);
+        try {
+            await api.admin.reorderStaff(creds, staffIds);
+            setStaffList(newList);
+        } catch (e) {
+            alert('並び替えに失敗しました');
             loadStaff();
         }
     };
@@ -78,51 +130,6 @@ export default function AdminPage() {
             }
         }
     };
-
-    // Checkpoint Actions
-    const openCpModal = (cp?: MajorCheckpoint) => {
-        setEditingCp(cp || { name: '', start_time: '09:00', end_time: '10:00', is_active: true });
-        setIsCpModalOpen(true);
-    };
-
-    const saveCheckpoint = async () => {
-        if (!editingCp.name || !editingCp.start_time || !editingCp.end_time) {
-            alert('必須項目を入力してください');
-            return;
-        }
-
-        try {
-            if (editingCp.id) {
-                await api.admin.updateMajorCheckpoint(creds, editingCp.id, editingCp);
-            } else {
-                await api.admin.createMajorCheckpoint(creds, editingCp);
-            }
-            setIsCpModalOpen(false);
-            loadCheckpoints();
-        } catch (e) {
-            alert('保存に失敗しました');
-        }
-    };
-
-    const deleteCheckpoint = async (id: number) => {
-        if (confirm('本当に削除しますか？')) {
-            await api.admin.deleteMajorCheckpoint(creds, id);
-            loadCheckpoints();
-        }
-    };
-
-    // Settings Actions
-    const updateSettingValue = async (key: string, value: string) => {
-        try {
-            await api.admin.updateSetting(creds, key, value);
-            alert('設定を保存しました');
-            loadSettings();
-        } catch (e) {
-            alert('保存に失敗しました');
-        }
-    };
-
-    const getSettingValue = (key: string) => settings.find(s => s.key === key)?.value || '';
 
     if (!isLoggedIn) {
         return (
@@ -162,30 +169,18 @@ export default function AdminPage() {
                 <button onClick={() => setIsLoggedIn(false)} className="text-slate-500 hover:text-slate-800 transition-colors">ログアウト</button>
             </div>
 
-            <div className="flex gap-4 mb-6 border-b border-slate-200 pb-2 overflow-x-auto">
+            <div className="flex gap-4 mb-6 border-b border-slate-200 pb-2">
                 <button
-                    className={`px-4 py-2 rounded transition-colors whitespace-nowrap ${activeTab === 'staff' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'staff' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
                     onClick={() => setActiveTab('staff')}
                 >
                     スタッフ管理
                 </button>
                 <button
-                    className={`px-4 py-2 rounded transition-colors whitespace-nowrap ${activeTab === 'toilets' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'toilets' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
                     onClick={() => setActiveTab('toilets')}
                 >
                     トイレ管理
-                </button>
-                <button
-                    className={`px-4 py-2 rounded transition-colors whitespace-nowrap ${activeTab === 'checkpoints' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
-                    onClick={() => setActiveTab('checkpoints')}
-                >
-                    チェックポイント
-                </button>
-                <button
-                    className={`px-4 py-2 rounded transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
-                    onClick={() => setActiveTab('settings')}
-                >
-                    システム設定
                 </button>
             </div>
 
@@ -195,26 +190,52 @@ export default function AdminPage() {
                         <div>
                             <h2 className="text-xl font-bold text-slate-700">スタッフ管理</h2>
                             <p className="text-sm text-slate-500 mt-1">
-                                スタッフの追加・削除を行います。アイコンは動物絵文字や👨‍⚕️（医師）、👩‍⚕️（看護師）などが使えます。
+                                スタッフの追加・編集・削除・並び替えを行います
                             </p>
                         </div>
-                        <button onClick={handleAddStaff} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
+                        <button onClick={() => openStaffModal()} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
                             <Plus size={16} /> スタッフ追加
                         </button>
                     </div>
-                    <div className="grid gap-4">
-                        {staffList.map(staff => (
+
+                    <div className="grid gap-2">
+                        {staffList.map((staff, index) => (
                             <div key={staff.id} className="bg-white border border-slate-200 p-4 rounded flex justify-between items-center shadow-sm">
                                 <div className="flex items-center gap-4">
-                                    <span className="text-2xl">{staff.icon_code}</span>
+                                    <div className="flex flex-col">
+                                        <button
+                                            onClick={() => moveStaff(index, 'up')}
+                                            disabled={index === 0}
+                                            className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                            title="上に移動"
+                                        >
+                                            <ChevronUp size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => moveStaff(index, 'down')}
+                                            disabled={index === staffList.length - 1}
+                                            className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                            title="下に移動"
+                                        >
+                                            <ChevronDown size={16} />
+                                        </button>
+                                    </div>
+                                    <span className="text-3xl">{staff.icon_code}</span>
                                     <div>
                                         <div className="font-bold text-slate-800">{staff.internal_name}</div>
-                                        <div className="text-sm text-slate-400">表示順: {staff.display_order}</div>
+                                        <div className="text-sm text-slate-400">表示順: {index + 1}</div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => handleDeleteStaff(staff.id)}
+                                        onClick={() => openStaffModal(staff)}
+                                        className="p-2 text-slate-500 hover:bg-slate-100 rounded transition-colors"
+                                        title="編集"
+                                    >
+                                        <Edit size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => deleteStaff(staff.id)}
                                         className="p-2 text-red-400 hover:bg-red-50 rounded transition-colors"
                                         title="削除"
                                     >
@@ -224,6 +245,40 @@ export default function AdminPage() {
                             </div>
                         ))}
                     </div>
+
+                    {inactiveStaffList.length > 0 && (
+                        <div className="mt-6">
+                            <button
+                                onClick={() => setShowInactive(!showInactive)}
+                                className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
+                            >
+                                {showInactive ? '▼' : '▶'} 削除済みスタッフを表示 ({inactiveStaffList.length}件)
+                            </button>
+                            
+                            {showInactive && (
+                                <div className="mt-2 grid gap-2">
+                                    {inactiveStaffList.map(staff => (
+                                        <div key={staff.id} className="bg-slate-100 border border-slate-200 p-4 rounded flex justify-between items-center opacity-60">
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl grayscale">{staff.icon_code}</span>
+                                                <div>
+                                                    <div className="font-bold text-slate-600">{staff.internal_name}</div>
+                                                    <div className="text-sm text-red-400">削除済み</div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => restoreStaff(staff.id)}
+                                                className="p-2 text-teal-600 hover:bg-teal-50 rounded transition-colors flex items-center gap-1"
+                                                title="復元"
+                                            >
+                                                <RotateCcw size={16} /> 復元
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -233,7 +288,7 @@ export default function AdminPage() {
                         <div>
                             <h2 className="text-xl font-bold text-slate-700">トイレ管理</h2>
                             <p className="text-sm text-slate-500 mt-1">
-                                管理対象のトイレを登録します（最大2箇所まで）。
+                                管理対象のトイレを登録します（最大2箇所まで）
                             </p>
                         </div>
                         <button onClick={handleAddToilet} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
@@ -253,131 +308,53 @@ export default function AdminPage() {
                 </div>
             )}
 
-            {activeTab === 'checkpoints' && (
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-700">主要チェックポイント</h2>
-                            <p className="text-sm text-slate-500 mt-1">
-                                重要なチェック時間帯を設定します。
-                            </p>
-                        </div>
-                        <button onClick={() => openCpModal()} className="bg-teal-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-500 shadow-sm transition-colors">
-                            <Plus size={16} /> 追加
-                        </button>
-                    </div>
-                    <div className="grid gap-4">
-                        {checkpoints.map(cp => (
-                            <div key={cp.id} className="bg-white border border-slate-200 p-4 rounded flex justify-between items-center shadow-sm">
-                                <div>
-                                    <div className="font-bold text-slate-800">{cp.name}</div>
-                                    <div className="text-sm text-slate-500">
-                                        {cp.start_time} - {cp.end_time}
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => openCpModal(cp)}
-                                        className="p-2 text-slate-500 hover:bg-slate-100 rounded transition-colors"
-                                        title="編集"
-                                    >
-                                        <Edit size={16} />
-                                    </button>
-                                    <button
-                                        onClick={() => deleteCheckpoint(cp.id)}
-                                        className="p-2 text-red-400 hover:bg-red-50 rounded transition-colors"
-                                        title="削除"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'settings' && (
-                <div>
-                    <div className="mb-6">
-                        <h2 className="text-xl font-bold text-slate-700">システム設定</h2>
-                        <p className="text-sm text-slate-500 mt-1">
-                            アプリケーション全体の動作設定を行います。
-                        </p>
-                    </div>
-
-                    <div className="grid gap-6 max-w-2xl">
-                        {[
-                            { key: 'opening_time', label: '開院時間', type: 'time' },
-                            { key: 'closing_time', label: '閉院時間', type: 'time' },
-                            { key: 'lunch_break_start', label: '昼休み開始', type: 'time' },
-                            { key: 'lunch_break_end', label: '昼休み終了', type: 'time' },
-                            { key: 'timeline_range_start', label: 'タイムライン表示開始', type: 'time' },
-                            { key: 'timeline_range_end', label: 'タイムライン表示終了', type: 'time' },
-                        ].map(setting => (
-                            <div key={setting.key} className="bg-white border border-slate-200 p-4 rounded shadow-sm flex items-center justify-between">
-                                <label className="font-medium text-slate-700">{setting.label}</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type={setting.type}
-                                        className="border border-slate-300 rounded p-1 text-slate-800"
-                                        defaultValue={getSettingValue(setting.key)}
-                                        onBlur={(e) => updateSettingValue(setting.key, e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Checkpoint Modal */}
-            {isCpModalOpen && (
+            {isStaffModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-700">
-                                {editingCp.id ? 'チェックポイント編集' : 'チェックポイント追加'}
+                                {editingStaff.isNew ? 'スタッフ追加' : 'スタッフ編集'}
                             </h3>
-                            <button onClick={() => setIsCpModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                            <button onClick={() => setIsStaffModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                                 <X size={20} />
                             </button>
                         </div>
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">名称</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">名前（内部管理用）</label>
                                 <input
                                     type="text"
                                     className="w-full border border-slate-300 rounded p-2 text-slate-800"
-                                    value={editingCp.name || ''}
-                                    onChange={e => setEditingCp({ ...editingCp, name: e.target.value })}
-                                    placeholder="例: 開院前チェック"
+                                    value={editingStaff.internal_name || ''}
+                                    onChange={e => setEditingStaff({ ...editingStaff, internal_name: e.target.value })}
+                                    placeholder="例: 田中さん"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">開始時間</label>
-                                    <input
-                                        type="time"
-                                        className="w-full border border-slate-300 rounded p-2 text-slate-800"
-                                        value={editingCp.start_time || ''}
-                                        onChange={e => setEditingCp({ ...editingCp, start_time: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">終了時間</label>
-                                    <input
-                                        type="time"
-                                        className="w-full border border-slate-300 rounded p-2 text-slate-800"
-                                        value={editingCp.end_time || ''}
-                                        onChange={e => setEditingCp({ ...editingCp, end_time: e.target.value })}
-                                    />
-                                </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">アイコン（絵文字）</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-300 rounded p-2 text-slate-800 text-2xl text-center"
+                                    value={editingStaff.icon_code || ''}
+                                    onChange={e => setEditingStaff({ ...editingStaff, icon_code: e.target.value })}
+                                    placeholder="🐶"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    動物絵文字や👨‍⚕️（医師）、👩‍⚕️（看護師）などが使えます
+                                </p>
                             </div>
 
+                            {editingStaff.icon_code && (
+                                <div className="bg-slate-50 p-4 rounded text-center">
+                                    <p className="text-sm text-slate-500 mb-2">プレビュー</p>
+                                    <span className="text-5xl">{editingStaff.icon_code}</span>
+                                    <p className="mt-2 text-slate-700">{editingStaff.internal_name}</p>
+                                </div>
+                            )}
+
                             <button
-                                onClick={saveCheckpoint}
+                                onClick={saveStaff}
                                 className="w-full bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-500 transition-colors mt-4"
                             >
                                 保存

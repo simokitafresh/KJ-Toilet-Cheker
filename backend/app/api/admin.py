@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from app.api import deps
 from app.models import Staff, Toilet, MajorCheckpoint, ClinicConfig
 from app.schemas import (
@@ -13,9 +14,18 @@ from app.schemas import (
 router = APIRouter(dependencies=[Depends(deps.get_current_admin)])
 
 # --- Staff ---
+class StaffReorderRequest(BaseModel):
+    staff_ids: List[int]
+
 @router.get("/staff", response_model=List[StaffSchema])
-def get_admin_staff(db: Session = Depends(deps.get_db)):
-    return db.query(Staff).order_by(Staff.display_order).all()
+def get_admin_staff(
+    include_inactive: bool = Query(False, description="Include inactive staff"),
+    db: Session = Depends(deps.get_db)
+):
+    query = db.query(Staff)
+    if not include_inactive:
+        query = query.filter(Staff.is_active == True)
+    return query.order_by(Staff.display_order).all()
 
 @router.post("/staff", response_model=StaffSchema)
 def create_staff(staff: StaffCreate, db: Session = Depends(deps.get_db)):
@@ -46,6 +56,15 @@ def delete_staff(staff_id: int, db: Session = Depends(deps.get_db)):
         raise HTTPException(status_code=404, detail="Staff not found")
     
     db_staff.is_active = False
+    db.commit()
+    return {"ok": True}
+
+@router.post("/staff/reorder")
+def reorder_staff(request: StaffReorderRequest, db: Session = Depends(deps.get_db)):
+    for index, staff_id in enumerate(request.staff_ids):
+        db_staff = db.query(Staff).filter(Staff.id == staff_id).first()
+        if db_staff:
+            db_staff.display_order = index + 1
     db.commit()
     return {"ok": True}
 

@@ -60,8 +60,9 @@ export const api = {
             'Content-Type': 'application/json',
         }),
 
-        getStaff: async (creds: string): Promise<Staff[]> => {
-            const res = await fetch(`${API_BASE}/admin/staff`, {
+        getStaff: async (creds: string, includeInactive: boolean = false): Promise<Staff[]> => {
+            const params = includeInactive ? '?include_inactive=true' : '';
+            const res = await fetch(`${API_BASE}/admin/staff${params}`, {
                 headers: { 'Authorization': `Basic ${creds}` }
             });
             if (!res.ok) throw new Error('Failed to fetch staff');
@@ -103,71 +104,19 @@ export const api = {
             return res.json();
         },
 
-        getMajorCheckpoints: async (creds: string) => {
-            const res = await fetch(`${API_BASE}/admin/major-checkpoints`, {
-                headers: { 'Authorization': `Basic ${creds}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch checkpoints');
-            return res.json();
-        },
-
-        createMajorCheckpoint: async (creds: string, data: any) => {
-            const res = await fetch(`${API_BASE}/admin/major-checkpoints`, {
+        reorderStaff: async (creds: string, staffIds: number[]) => {
+            const res = await fetch(`${API_BASE}/admin/staff/reorder`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Basic ${creds}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify({ staff_ids: staffIds })
             });
-            if (!res.ok) throw new Error('Failed to create checkpoint');
+            if (!res.ok) throw new Error('Failed to reorder staff');
             return res.json();
         },
 
-        updateMajorCheckpoint: async (creds: string, id: number, data: any) => {
-            const res = await fetch(`${API_BASE}/admin/major-checkpoints/${id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Basic ${creds}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) throw new Error('Failed to update checkpoint');
-            return res.json();
-        },
-
-        deleteMajorCheckpoint: async (creds: string, id: number) => {
-            const res = await fetch(`${API_BASE}/admin/major-checkpoints/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Basic ${creds}` }
-            });
-            if (!res.ok) throw new Error('Failed to delete checkpoint');
-            return res.json();
-        },
-
-        getSettings: async (creds: string) => {
-            const res = await fetch(`${API_BASE}/admin/settings`, {
-                headers: { 'Authorization': `Basic ${creds}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch settings');
-            return res.json();
-        },
-
-        updateSetting: async (creds: string, key: string, value: string) => {
-            const res = await fetch(`${API_BASE}/admin/settings?key=${key}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Basic ${creds}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ value })
-            });
-            if (!res.ok) throw new Error('Failed to update setting');
-            return res.json();
-        },
-
-        // ... add other admin methods as needed (toilets, settings)
         getToilets: async (creds: string): Promise<Toilet[]> => {
             const res = await fetch(`${API_BASE}/admin/toilets`, {
                 headers: { 'Authorization': `Basic ${creds}` }
