@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Staff, Toilet } from '@/lib/types';
-import { Camera, Check, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function CapturePage() {
@@ -15,6 +15,41 @@ export default function CapturePage() {
     const [selectedToiletId, setSelectedToiletId] = useState<number | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [cameraError, setCameraError] = useState<string | null>(null);
+    
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+
+    // カメラ起動
+    const startCamera = useCallback(async () => {
+        try {
+            setCameraError(null);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => {
+                    setCameraReady(true);
+                };
+            }
+        } catch (err) {
+            console.error('Camera error:', err);
+            setCameraError('カメラを起動できませんでした。カメラへのアクセスを許可してください。');
+        }
+    }, []);
+
+    // カメラ停止
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setCameraReady(false);
+    };
 
     useEffect(() => {
         // Load master data
@@ -29,56 +64,41 @@ export default function CapturePage() {
             .catch(err => setError('Failed to load data'));
     }, []);
 
-    const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const files = Array.from(e.target.files);
-
-            // Resize images
-            const resizedFiles = await Promise.all(files.map(resizeImage));
-            setImages(prev => [...prev, ...resizedFiles]);
-
-            if (images.length + files.length >= 2) {
-                setStep('staff');
-            }
+    // カメラステップの時にカメラを起動
+    useEffect(() => {
+        if (step === 'camera') {
+            startCamera();
+        } else {
+            stopCamera();
         }
-    };
+        return () => stopCamera();
+    }, [step, startCamera]);
 
-    const resizeImage = (file: File): Promise<File> => {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const maxDim = 1280;
+    // 写真撮影（タップで即座にキャプチャ）
+    const capturePhoto = () => {
+        if (!videoRef.current || !cameraReady) return;
 
-                if (width > height) {
-                    if (width > maxDim) {
-                        height *= maxDim / width;
-                        width = maxDim;
-                    }
-                } else {
-                    if (height > maxDim) {
-                        width *= maxDim / height;
-                        height = maxDim;
-                    }
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.drawImage(video, 0, 0);
+        
+        canvas.toBlob((blob) => {
+            if (blob) {
+                const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const newImages = [...images, file];
+                setImages(newImages);
+                
+                // 2枚で自動遷移
+                if (newImages.length >= 2) {
+                    setStep('staff');
                 }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                    } else {
-                        resolve(file); // Fallback
-                    }
-                }, 'image/jpeg', 0.75);
-            };
-            img.src = URL.createObjectURL(file);
-        });
+            }
+        }, 'image/jpeg', 0.85);
     };
 
     const handleStaffSelect = async (staffId: number) => {
@@ -90,7 +110,7 @@ export default function CapturePage() {
             return;
         }
         if (images.length < 2) {
-            setError('Please take at least 2 photos');
+            setError('写真を2枚以上撮影してください');
             setStep('camera');
             return;
         }
@@ -136,50 +156,78 @@ export default function CapturePage() {
 
     if (step === 'camera') {
         return (
-            <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center">
-                <h1 className="text-2xl mb-8 font-bold text-slate-700">トイレチェック撮影</h1>
-
-                {toilets.length > 1 && (
-                    <select
-                        className="mb-4 p-2 bg-white border border-slate-300 rounded shadow-sm text-slate-700"
-                        value={selectedToiletId || ''}
-                        onChange={(e) => setSelectedToiletId(Number(e.target.value))}
-                    >
-                        {toilets.map(t => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                    </select>
-                )}
-
-                <div className="mb-4 text-center">
-                    <p className="text-slate-600">現在: {images.length}枚</p>
-                    {images.length < 2 && <p className="text-red-500 text-sm">最低2枚必要です</p>}
+            <div className="min-h-screen bg-black text-white flex flex-col">
+                {/* ヘッダー */}
+                <div className="bg-slate-900 p-4 flex items-center justify-between">
+                    <h1 className="text-lg font-bold">トイレチェック撮影</h1>
+                    <div className="text-right">
+                        <span className="text-2xl font-bold text-teal-400">{images.length}</span>
+                        <span className="text-slate-400">/2枚</span>
+                    </div>
                 </div>
 
-                <label className="w-64 h-64 bg-teal-600 rounded-full flex items-center justify-center cursor-pointer shadow-lg active:scale-95 transition-transform hover:bg-teal-500 text-white">
-                    <Camera size={64} />
-                    <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        multiple
-                        className="hidden"
-                        onChange={handleImageCapture}
-                    />
-                </label>
-
-                <p className="mt-4 text-slate-500">タップして撮影（連続可）</p>
-
-                {images.length >= 2 && (
-                    <button
-                        onClick={() => setStep('staff')}
-                        className="mt-8 px-8 py-3 bg-teal-600 text-white rounded-lg font-bold flex items-center gap-2 shadow-md hover:bg-teal-500 transition-colors"
-                    >
-                        次へ進む <Check />
-                    </button>
+                {toilets.length > 1 && (
+                    <div className="bg-slate-900 px-4 pb-2">
+                        <select
+                            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-white"
+                            value={selectedToiletId || ''}
+                            onChange={(e) => setSelectedToiletId(Number(e.target.value))}
+                        >
+                            {toilets.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 )}
 
-                {error && <div className="mt-4 text-red-500 flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
+                {/* カメラプレビュー */}
+                <div className="flex-1 relative bg-black flex items-center justify-center">
+                    {cameraError ? (
+                        <div className="text-center p-4">
+                            <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
+                            <p className="text-red-400">{cameraError}</p>
+                            <button 
+                                onClick={startCamera}
+                                className="mt-4 px-4 py-2 bg-teal-600 rounded"
+                            >
+                                再試行
+                            </button>
+                        </div>
+                    ) : (
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                        />
+                    )}
+
+                    {/* 撮影枚数オーバーレイ */}
+                    {images.length === 1 && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-2 rounded-full font-bold">
+                            あと1枚！
+                        </div>
+                    )}
+                </div>
+
+                {/* シャッターボタン */}
+                <div className="bg-slate-900 p-6 flex justify-center">
+                    <button
+                        onClick={capturePhoto}
+                        disabled={!cameraReady}
+                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <div className="w-16 h-16 bg-white border-4 border-slate-900 rounded-full" />
+                    </button>
+                </div>
+
+                {error && (
+                    <div className="bg-red-500 p-3 text-center">
+                        <AlertCircle size={16} className="inline mr-2" />
+                        {error}
+                    </div>
+                )}
             </div>
         );
     }
@@ -213,10 +261,15 @@ export default function CapturePage() {
             {error && <div className="mt-4 text-red-500 flex items-center gap-2 justify-center"><AlertCircle size={16} /> {error}</div>}
 
             <button
-                onClick={() => setStep('camera')}
+                onClick={() => {
+                    if (confirm('撮影画面に戻りますか？撮影した写真はリセットされます。')) {
+                        setImages([]);
+                        setStep('camera');
+                    }
+                }}
                 className="mt-8 w-full py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
             >
-                戻る
+                戻る（写真リセット）
             </button>
         </div>
     );
