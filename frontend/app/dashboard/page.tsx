@@ -2,191 +2,163 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { DashboardDayResponse, Toilet } from '@/lib/types';
-import { AlertTriangle, CheckCircle, Clock, XCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus } from '@/lib/types';
 import clsx from 'clsx';
-import Image from 'next/image';
 
-export default function DashboardPage() {
-    const [data, setData] = useState<DashboardDayResponse | null>(null);
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [toilets, setToilets] = useState<Toilet[]>([]);
-    const [selectedToiletId, setSelectedToiletId] = useState<number | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+// ステータスボックスコンポーネント
+interface StatusBoxProps {
+    label: string;
+    status: 'pending' | 'ok' | 'warning' | 'alert';
+    display: string;
+}
 
-    useEffect(() => {
-        api.getToilets().then(t => {
-            setToilets(t);
-            if (t.length > 0) setSelectedToiletId(t[0].id);
-        });
-    }, []);
-
-    useEffect(() => {
-        if (selectedToiletId) {
-            setLoading(true);
-            api.getDashboardDay(date, selectedToiletId)
-                .then(res => {
-                    setData(res);
-                    setLoading(false);
-                })
-                .catch(err => setLoading(false));
-        }
-    }, [date, selectedToiletId]);
-
-    const changeDate = (delta: number) => {
-        const d = new Date(date);
-        d.setDate(d.getDate() + delta);
-        setDate(d.toISOString().split('T')[0]);
+function StatusBox({ label, status, display }: StatusBoxProps) {
+    const styles = {
+        ok: 'bg-emerald-50 border-emerald-300',
+        warning: 'bg-amber-50 border-amber-300',
+        alert: 'bg-red-50 border-red-300 animate-pulse',
+        pending: 'bg-slate-50 border-slate-200',
     };
 
-    if (!selectedToiletId) return <div className="p-4 text-slate-600">読み込み中...</div>;
+    const icons = {
+        ok: '🟢',
+        warning: '🟡',
+        alert: '🔴',
+        pending: '⏳',
+    };
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 pb-20">
-            {/* Header */}
-            <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 p-4 border-b border-slate-200 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-xl font-bold text-slate-700">トイレ管理ダッシュボード</h1>
-                    {toilets.length > 1 && (
-                        <select
-                            className="bg-white border border-slate-300 rounded p-1 text-slate-700 text-sm"
-                            value={selectedToiletId}
-                            onChange={(e) => setSelectedToiletId(Number(e.target.value))}
-                        >
-                            {toilets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                    )}
-                </div>
+        <div className={clsx(
+            "p-3 rounded-lg border-2 text-center transition-all",
+            styles[status]
+        )}>
+            <div className="text-xs text-slate-500 mb-1 font-medium">{label}</div>
+            <div className="text-2xl mb-1">{icons[status]}</div>
+            <div className="text-lg font-bold text-slate-700">{display}</div>
+        </div>
+    );
+}
 
-                <div className="flex items-center justify-between bg-slate-100 rounded-lg p-2 border border-slate-200">
-                    <button onClick={() => changeDate(-1)} className="p-2 hover:bg-white rounded transition-colors text-slate-600"><ChevronLeft /></button>
-                    <div className="flex items-center gap-2 font-mono text-slate-700 font-bold">
-                        <Calendar size={16} /> {date}
-                    </div>
-                    <button onClick={() => changeDate(1)} className="p-2 hover:bg-white rounded transition-colors text-slate-600"><ChevronRight /></button>
+// 朝/午後チェック用の表示文字列生成
+function getScheduledDisplay(check: ScheduledCheckStatus): string {
+    if (check.status === 'pending') {
+        return '待機中';
+    }
+    if (check.time) {
+        return check.time;
+    }
+    return '未';
+}
+
+// 定期チェック用の表示文字列生成
+function getRegularDisplay(check: RegularCheckStatus): string {
+    if (!check.is_active) {
+        return '時間外';
+    }
+    return `${check.minutes_elapsed}分`;
+}
+
+export default function DashboardPage() {
+    const [data, setData] = useState<SimpleStatusResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchData = async () => {
+        try {
+            const res = await api.getSimpleStatus();
+            setData(res);
+            setError(null);
+        } catch (err) {
+            setError('データの取得に失敗しました');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+        // 30秒ごとに自動更新
+        const interval = setInterval(fetchData, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-slate-400">読み込み中...</div>
+            </div>
+        );
+    }
+
+    if (error || !data) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-red-500">{error || 'エラーが発生しました'}</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-800">
+            {/* Header */}
+            <div className="sticky top-0 bg-white/90 backdrop-blur-sm z-10 p-4 border-b border-slate-200">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-lg font-bold text-slate-700">トイレチェック</h1>
+                    <span className="text-sm text-slate-500">{data.current_time} 現在</span>
                 </div>
             </div>
 
-            {loading ? (
-                <div className="p-8 text-center text-slate-400">データ読み込み中...</div>
-            ) : (
-                <div className="p-4 space-y-6">
-                    {/* Major Checkpoints */}
-                    <section>
-                        <div className="mb-2">
-                            <h2 className="text-sm text-slate-500 uppercase tracking-wider font-semibold">主要チェックポイント</h2>
-                            <p className="text-xs text-slate-400">重要な時間帯のチェック状況です</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            {data?.major_checkpoints.map((cp, i) => (
-                                <div key={i} className={clsx(
-                                    "p-3 rounded-lg border flex flex-col justify-between h-24 shadow-sm transition-all",
-                                    cp.status === 'completed' ? "bg-green-50 border-green-200" :
-                                        cp.status === 'missed' ? "bg-red-50 border-red-200" :
-                                            "bg-white border-slate-200"
-                                )}>
-                                    <div className="text-sm font-medium text-slate-700">{cp.name}</div>
-                                    <div className="flex items-center gap-2">
-                                        {cp.status === 'completed' ? <CheckCircle className="text-green-600" size={20} /> :
-                                            cp.status === 'missed' ? <XCircle className="text-red-500" size={20} /> :
-                                                <Clock className="text-slate-400" size={20} />}
-                                        <span className={clsx(
-                                            "text-lg font-bold",
-                                            cp.status === 'completed' ? "text-green-700" :
-                                                cp.status === 'missed' ? "text-red-600" : "text-slate-400"
-                                        )}>
-                                            {cp.last_check_time || '--:--'}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-
-                    {/* Alerts */}
-                    {data?.realtime_alerts && data.realtime_alerts.length > 0 && (
-                        <section>
-                            <div className="mb-2">
-                                <h2 className="text-sm text-slate-500 uppercase tracking-wider font-semibold">アラート</h2>
-                                <p className="text-xs text-slate-400">長時間チェックされていないトイレがあります</p>
-                            </div>
-                            <div className="space-y-2">
-                                {data.realtime_alerts.map((alert, i) => (
-                                    <div key={i} className={clsx(
-                                        "p-4 rounded-lg flex items-center gap-3 border shadow-sm",
-                                        alert.alert_level === 'alert' ? "bg-red-50 border-red-200 text-red-800" : "bg-amber-50 border-amber-200 text-amber-800"
-                                    )}>
-                                        <AlertTriangle className={alert.alert_level === 'alert' ? "text-red-600" : "text-amber-600"} />
-                                        <div>
-                                            <div className="font-bold">{alert.toilet_name}</div>
-                                            <div className="text-sm">{alert.minutes_elapsed}分 経過</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Timeline */}
-                    <section>
-                        <div className="mb-2">
-                            <h2 className="text-sm text-slate-500 uppercase tracking-wider font-semibold">タイムライン</h2>
-                            <p className="text-xs text-slate-400">本日のチェック履歴一覧です</p>
-                        </div>
-                        <div className="space-y-3">
-                            {data?.timeline.map((item) => (
-                                <div key={item.id} className="bg-white border border-slate-200 rounded-lg p-3 flex items-start gap-3 shadow-sm">
-                                    <div className="text-2xl bg-slate-100 border border-slate-200 rounded-full w-10 h-10 flex items-center justify-center">
-                                        {item.staff_icon}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-mono text-lg text-slate-700 font-bold">
-                                                {new Date(item.checked_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                            <span className={clsx(
-                                                "px-2 py-0.5 rounded text-xs font-bold border",
-                                                item.status_type === 'NORMAL' ? "bg-green-100 text-green-800 border-green-200" :
-                                                    item.status_type === 'TOO_SHORT' ? "bg-amber-100 text-amber-800 border-amber-200" :
-                                                        "bg-red-100 text-red-800 border-red-200"
-                                            )}>
-                                                {item.status_type === 'NORMAL' ? '正常' :
-                                                    item.status_type === 'TOO_SHORT' ? '短時間' : '異常'}
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-2 overflow-x-auto pb-1">
-                                            {item.thumbnails.map((url, idx) => (
-                                                <div key={idx} className="relative w-16 h-16 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setSelectedImage(url)}>
-                                                    <img
-                                                        src={`${process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000'}${url}`}
-                                                        alt="check"
-                                                        className="w-full h-full object-cover rounded border border-slate-200"
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {data?.timeline.length === 0 && (
-                                <div className="text-center text-slate-400 py-8 italic">本日のチェック記録はありません</div>
-                            )}
-                        </div>
-                    </section>
-                </div>
-            )}
-
-            {/* Image Modal */}
-            {selectedImage && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedImage(null)}>
-                    <img
-                        src={`${process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000'}${selectedImage}`}
-                        alt="Full view"
-                        className="max-w-full max-h-full object-contain rounded shadow-2xl"
+            <div className="p-4 space-y-6">
+                {/* アラートボックス 3列 */}
+                <div className="grid grid-cols-3 gap-3">
+                    <StatusBox
+                        label={`朝 〜${data.morning_check.deadline}`}
+                        status={data.morning_check.status}
+                        display={getScheduledDisplay(data.morning_check)}
+                    />
+                    <StatusBox
+                        label={`午後 〜${data.afternoon_check.deadline}`}
+                        status={data.afternoon_check.status}
+                        display={getScheduledDisplay(data.afternoon_check)}
+                    />
+                    <StatusBox
+                        label="定期"
+                        status={data.regular_check.is_active ? data.regular_check.status : 'pending'}
+                        display={getRegularDisplay(data.regular_check)}
                     />
                 </div>
-            )}
+
+                {/* 履歴テーブル */}
+                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="px-4 py-2 bg-slate-50 border-b border-slate-200">
+                        <h2 className="text-sm font-semibold text-slate-600">本日のチェック履歴</h2>
+                    </div>
+                    
+                    {data.timeline.length > 0 ? (
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-slate-100">
+                                    <th className="px-4 py-2 text-left text-xs text-slate-500 font-medium">時刻</th>
+                                    <th className="px-4 py-2 text-left text-xs text-slate-500 font-medium">担当</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.timeline.map((item, idx) => (
+                                    <tr key={idx} className="border-b border-slate-50 last:border-0">
+                                        <td className="px-4 py-3 font-mono text-slate-700">{item.time}</td>
+                                        <td className="px-4 py-3 text-2xl">{item.staff_icon}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    ) : (
+                        <div className="px-4 py-8 text-center text-slate-400">
+                            本日のチェック記録はありません
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

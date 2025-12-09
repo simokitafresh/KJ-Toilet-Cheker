@@ -1,4 +1,4 @@
-import { Staff, Toilet, DashboardDayResponse, StaffCreate, StaffUpdate, ToiletCreate } from './types';
+import { Staff, Toilet, DashboardDayResponse, StaffCreate, StaffUpdate, ToiletCreate, SimpleStatusResponse } from './types';
 
 const API_HOST = process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000';
 const API_BASE = `${API_HOST}/api`;
@@ -30,6 +30,13 @@ export const api = {
 
         const res = await fetch(`${API_BASE}/dashboard/day?${params}`);
         if (!res.ok) throw new Error('Failed to fetch dashboard data');
+        return res.json();
+    },
+
+    // Simple Status (New Alert System)
+    getSimpleStatus: async (): Promise<SimpleStatusResponse> => {
+        const res = await fetch(`${API_BASE}/dashboard/simple-status`);
+        if (!res.ok) throw new Error('Failed to fetch simple status');
         return res.json();
     },
 

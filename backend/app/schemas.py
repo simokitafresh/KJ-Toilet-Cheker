@@ -136,3 +136,30 @@ class DashboardDayResponse(BaseModel):
     major_checkpoints: List[MajorCheckpointStatus]
     realtime_alerts: List[RealtimeAlert]
     timeline: List[TimelineItem]
+
+# --- Simple Status (New Alert System) ---
+class ScheduledCheckStatus(BaseModel):
+    status: str  # pending, ok, warning, alert
+    time: Optional[str] = None  # HH:MM
+    deadline: str  # HH:MM
+    time_range: str  # "08:00〜08:50"
+
+class RegularCheckStatus(BaseModel):
+    status: str  # ok, warning, alert
+    minutes_elapsed: int
+    next_check_in: int  # マイナス=超過
+    threshold: int
+    is_active: bool
+
+class SimpleTimelineItem(BaseModel):
+    time: str  # HH:MM
+    staff_icon: str
+
+class SimpleStatusResponse(BaseModel):
+    date: str  # YYYY-MM-DD
+    current_time: str  # HH:MM
+    morning_check: ScheduledCheckStatus
+    afternoon_check: ScheduledCheckStatus
+    regular_check: RegularCheckStatus
+    last_check_at: Optional[str] = None  # ISO format
+    timeline: List[SimpleTimelineItem]

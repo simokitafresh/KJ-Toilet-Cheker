@@ -7,9 +7,237 @@ import os
 from app.api import deps
 from app.core.config import settings
 from app.models import ToiletCheck, MajorCheckpoint, Toilet, Staff, CheckImage
-from app.schemas import DashboardDayResponse, MajorCheckpointStatus, RealtimeAlert, TimelineItem
+from app.schemas import (
+    DashboardDayResponse, MajorCheckpointStatus, RealtimeAlert, TimelineItem,
+    SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus, SimpleTimelineItem
+)
 
 router = APIRouter()
+
+# JST timezone
+JST = timezone(timedelta(hours=9))
+
+
+def parse_time(time_str: str) -> time:
+    """Parse HH:MM string to time object"""
+    h, m = map(int, time_str.split(":"))
+    return time(h, m)
+
+
+def to_jst(dt: datetime) -> datetime:
+    """datetimeをJSTに変換"""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST)
+
+
+def calculate_scheduled_check_status(
+    checks: List[ToiletCheck],
+    start_time: time,
+    deadline: time,
+    now_jst: datetime
+) -> ScheduledCheckStatus:
+    """
+    朝チェック・午後チェックの状態を計算
+    - 開始時刻から警告（黄色）
+    - 期限を過ぎたらアラート（赤）
+    - チェック完了したら時刻表示（OK/緑）
+    """
+    time_range = f"{start_time.strftime('%H:%M')}〜{deadline.strftime('%H:%M')}"
+    
+    # この時間帯以降のチェックを探す（開始時刻以降なら期限超過でもOK）
+    matched_check = None
+    for check in checks:
+        check_jst = to_jst(check.checked_at)
+        check_time = check_jst.time()
+        if check_time >= start_time:
+            matched_check = check
+            break
+    
+    if matched_check:
+        # チェック完了 → OK（緑）+ 時刻表示
+        check_jst = to_jst(matched_check.checked_at)
+        check_time_str = check_jst.strftime("%H:%M")
+        
+        return ScheduledCheckStatus(
+            status="ok",
+            time=check_time_str,
+            deadline=deadline.strftime("%H:%M"),
+            time_range=time_range
+        )
+    else:
+        # 未実施
+        now_time = now_jst.time()
+        if now_time < start_time:
+            # 開始時刻前 → 待機中（グレー）
+            status = "pending"
+        elif now_time <= deadline:
+            # 開始〜期限内 → 警告（黄色）
+            status = "warning"
+        else:
+            # 期限超過 → アラート（赤）
+            status = "alert"
+        
+        return ScheduledCheckStatus(
+            status=status,
+            time=None,
+            deadline=deadline.strftime("%H:%M"),
+            time_range=time_range
+        )
+
+
+def calculate_elapsed_excluding_lunch(last_check_jst: datetime, now_jst: datetime) -> int:
+    """
+    昼休み (12:00-14:00) を除外した経過時間（分）を計算
+    """
+    lunch_start = time(12, 0)
+    lunch_end = time(14, 0)
+    
+    total_minutes = 0
+    current = last_check_jst
+    
+    while current < now_jst:
+        current_time = current.time()
+        
+        # 昼休み中の場合はスキップ
+        if lunch_start <= current_time < lunch_end:
+            # 昼休み終了まで進める
+            lunch_end_dt = datetime.combine(current.date(), lunch_end).replace(tzinfo=JST)
+            if lunch_end_dt > now_jst:
+                break
+            current = lunch_end_dt
+            continue
+        
+        # 次の1分を加算
+        next_minute = current + timedelta(minutes=1)
+        
+        # 昼休み開始前で、次の1分が昼休み中なら昼休み開始まで
+        if current_time < lunch_start and next_minute.time() >= lunch_start:
+            lunch_start_dt = datetime.combine(current.date(), lunch_start).replace(tzinfo=JST)
+            minutes_to_lunch = int((lunch_start_dt - current).total_seconds() / 60)
+            total_minutes += minutes_to_lunch
+            current = lunch_start_dt
+            continue
+        
+        # 通常の1分加算
+        if next_minute > now_jst:
+            remaining = int((now_jst - current).total_seconds() / 60)
+            total_minutes += remaining
+            break
+        
+        total_minutes += 1
+        current = next_minute
+    
+    return total_minutes
+
+
+def calculate_regular_check_status(
+    last_check: Optional[ToiletCheck],
+    now_jst: datetime
+) -> RegularCheckStatus:
+    """
+    定期チェックの状態を計算
+    """
+    regular_start = parse_time(settings.REGULAR_CHECK_START)
+    regular_end = parse_time(settings.REGULAR_CHECK_END)
+    threshold = settings.REGULAR_CHECK_INTERVAL_MINUTES
+    
+    now_time = now_jst.time()
+    is_active = regular_start <= now_time <= regular_end
+    
+    if not last_check:
+        # チェックなし - 営業開始からの経過時間
+        if is_active:
+            start_dt = datetime.combine(now_jst.date(), regular_start).replace(tzinfo=JST)
+            elapsed = calculate_elapsed_excluding_lunch(start_dt, now_jst)
+        else:
+            elapsed = 0
+    else:
+        last_check_jst = to_jst(last_check.checked_at)
+        elapsed = calculate_elapsed_excluding_lunch(last_check_jst, now_jst)
+    
+    # ステータス判定
+    if elapsed <= threshold:
+        status = "ok"
+    elif elapsed <= threshold * 2:
+        status = "warning"
+    else:
+        status = "alert"
+    
+    return RegularCheckStatus(
+        status=status,
+        minutes_elapsed=elapsed,
+        next_check_in=threshold - elapsed,
+        threshold=threshold,
+        is_active=is_active
+    )
+
+
+@router.get("/simple-status", response_model=SimpleStatusResponse)
+def get_simple_status(db: Session = Depends(deps.get_db)):
+    """
+    シンプルなアラート状態を返す（トイレ1つ前提）
+    """
+    now_utc = datetime.now(timezone.utc)
+    now_jst = now_utc.astimezone(JST)
+    today = now_jst.date()
+    
+    # 本日のチェックを取得
+    day_checks = db.query(ToiletCheck).filter(
+        func.date(ToiletCheck.checked_at) == today
+    ).order_by(ToiletCheck.checked_at).all()
+    
+    # 時刻設定を取得
+    morning_start = parse_time(settings.MORNING_CHECK_START)
+    morning_deadline = parse_time(settings.MORNING_CHECK_DEADLINE)
+    afternoon_start = parse_time(settings.AFTERNOON_CHECK_START)
+    afternoon_deadline = parse_time(settings.AFTERNOON_CHECK_DEADLINE)
+    
+    # 朝チェック判定（8:00〜14:00のチェックを対象）
+    morning_checks = [c for c in day_checks 
+                      if morning_start <= to_jst(c.checked_at).time() < afternoon_start]
+    
+    morning_status = calculate_scheduled_check_status(
+        morning_checks, morning_start, morning_deadline, now_jst
+    )
+    
+    # 午後チェック判定（14:00〜のチェックを対象）
+    afternoon_checks = [c for c in day_checks 
+                        if to_jst(c.checked_at).time() >= afternoon_start]
+    
+    afternoon_status = calculate_scheduled_check_status(
+        afternoon_checks, afternoon_start, afternoon_deadline, now_jst
+    )
+    
+    # 定期チェック判定
+    last_check = day_checks[-1] if day_checks else None
+    regular_status = calculate_regular_check_status(last_check, now_jst)
+    
+    # タイムライン作成（新しい順）
+    timeline = []
+    for check in reversed(day_checks):
+        check_jst = to_jst(check.checked_at)
+        staff_icon = check.staff.icon_code if check.staff else "❓"
+        timeline.append(SimpleTimelineItem(
+            time=check_jst.strftime("%H:%M"),
+            staff_icon=staff_icon
+        ))
+    
+    # 最終チェック時刻
+    last_check_at = None
+    if last_check:
+        last_check_at = to_jst(last_check.checked_at).isoformat()
+    
+    return SimpleStatusResponse(
+        date=today.isoformat(),
+        current_time=now_jst.strftime("%H:%M"),
+        morning_check=morning_status,
+        afternoon_check=afternoon_status,
+        regular_check=regular_status,
+        last_check_at=last_check_at,
+        timeline=timeline
+    )
+
 
 @router.get("/day", response_model=DashboardDayResponse)
 def get_dashboard_day(

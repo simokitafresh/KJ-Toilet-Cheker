@@ -64,3 +64,34 @@ export interface MajorCheckpoint {
     is_active: boolean;
     display_order: number;
 }
+
+// --- Simple Status (New Alert System) ---
+export interface ScheduledCheckStatus {
+    status: 'pending' | 'ok' | 'warning' | 'alert';
+    time: string | null;
+    deadline: string;
+    time_range: string;
+}
+
+export interface RegularCheckStatus {
+    status: 'ok' | 'warning' | 'alert';
+    minutes_elapsed: number;
+    next_check_in: number;
+    threshold: number;
+    is_active: boolean;
+}
+
+export interface SimpleTimelineItem {
+    time: string;
+    staff_icon: string;
+}
+
+export interface SimpleStatusResponse {
+    date: string;
+    current_time: string;
+    morning_check: ScheduledCheckStatus;
+    afternoon_check: ScheduledCheckStatus;
+    regular_check: RegularCheckStatus;
+    last_check_at: string | null;
+    timeline: SimpleTimelineItem[];
+}
