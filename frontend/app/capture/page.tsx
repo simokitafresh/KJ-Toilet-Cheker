@@ -36,8 +36,7 @@ export default function CapturePage() {
                     setCameraReady(true);
                 };
             }
-        } catch (err) {
-            console.error('Camera error:', err);
+        } catch {
             setCameraError('カメラを起動できませんでした。カメラへのアクセスを許可してください。');
         }
     }, []);
@@ -61,7 +60,7 @@ export default function CapturePage() {
                     setSelectedToiletId(toiletData[0].id);
                 }
             })
-            .catch(err => setError('データの読み込みに失敗しました'));
+            .catch(() => setError('データの読み込みに失敗しました'));
     }, []);
 
     // カメラステップの時にカメラを起動
@@ -77,6 +76,7 @@ export default function CapturePage() {
     // 写真撮影（タップで即座にキャプチャ）
     const capturePhoto = () => {
         if (!videoRef.current || !cameraReady) return;
+        setError(null); // エラーをクリア
 
         const video = videoRef.current;
         const canvas = document.createElement('canvas');
@@ -104,7 +104,6 @@ export default function CapturePage() {
     const handleStaffSelect = async (staffId: number) => {
         if (!selectedToiletId) {
             alert('トイレが選択されていません。管理者に連絡してください。');
-            console.error('No toilet selected');
             return;
         }
         if (images.length < 2) {
@@ -133,14 +132,12 @@ export default function CapturePage() {
 
             await api.submitCheck(formData);
 
-            // Success
-            alert('記録しました'); // Simple alert as per spec (or toast)
-            router.push('/'); // Go back to home/dashboard? Spec says "Main screen"
-            // Assuming root is dashboard or capture? 
-            // Spec says: "Auto return to main screen". 
-            // If /capture is the main screen for staff, maybe reset state?
+            // 成功 - ステートをリセットしてから遷移
             setImages([]);
             setStep('camera');
+            setError(null);
+            alert('記録しました');
+            router.push('/');
         } catch (err) {
             const message = err instanceof Error ? err.message : '不明なエラー';
             setError(`送信に失敗しました: ${message}`);
@@ -152,15 +149,7 @@ export default function CapturePage() {
     if (step === 'camera') {
         return (
             <div className="h-screen bg-slate-50 text-slate-800 flex flex-col overflow-hidden">
-                {/* ヘッダー - 固定高さ */}
-                <div className="flex-shrink-0 bg-teal-600 p-3 flex items-center justify-between text-white">
-                    <h1 className="text-base font-bold">トイレチェック撮影</h1>
-                    <div className="text-right">
-                        <span className="text-2xl font-bold">{images.length}</span>
-                        <span className="text-teal-100">/2枚</span>
-                    </div>
-                </div>
-
+                {/* トイレ選択（複数ある場合のみ） */}
                 {toilets.length > 1 && (
                     <div className="flex-shrink-0 bg-white px-4 py-2 border-b border-slate-200">
                         <select
@@ -176,11 +165,11 @@ export default function CapturePage() {
                 )}
 
                 {/* カメラプレビュー - 残りスペースを使用 */}
-                <div className="flex-1 min-h-0 relative bg-slate-200 flex items-center justify-center">
+                <div className="flex-1 min-h-0 relative bg-slate-800 flex items-center justify-center">
                     {cameraError ? (
                         <div className="text-center p-4">
                             <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
-                            <p className="text-red-600">{cameraError}</p>
+                            <p className="text-red-400">{cameraError}</p>
                             <button 
                                 onClick={startCamera}
                                 className="mt-4 px-4 py-2 bg-teal-600 text-white rounded"
@@ -194,11 +183,11 @@ export default function CapturePage() {
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-full object-contain bg-slate-800"
+                            className="w-full h-full object-contain"
                         />
                     )}
 
-                    {/* 撮影枚数オーバーレイ */}
+                    {/* 撮影枚数オーバーレイ - 上部に表示 */}
                     {images.length === 1 && (
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-900 px-4 py-2 rounded-full font-bold shadow-md">
                             あと1枚！
@@ -206,16 +195,26 @@ export default function CapturePage() {
                     )}
                 </div>
 
-                {/* シャッターボタン - 固定高さ、常に表示 */}
-                <div className="flex-shrink-0 bg-white p-4 flex justify-center border-t border-slate-200 safe-area-bottom">
+                {/* フッター - シャッターボタンと撮影枚数 */}
+                <div className="flex-shrink-0 bg-teal-600 p-3 flex items-center justify-between safe-area-bottom">
+                    {/* 左側: 撮影枚数 */}
+                    <div className="text-white w-20">
+                        <span className="text-2xl font-bold">{images.length}</span>
+                        <span className="text-teal-100">/2枚</span>
+                    </div>
+
+                    {/* 中央: シャッターボタン */}
                     <button
                         onClick={capturePhoto}
                         disabled={!cameraReady}
-                        className="rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-500"
-                        style={{ width: '72px', height: '72px' }}
+                        className="rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                        style={{ width: '64px', height: '64px' }}
                     >
-                        <div className="bg-white rounded-full" style={{ width: '56px', height: '56px' }} />
+                        <div className="bg-teal-600 rounded-full" style={{ width: '52px', height: '52px' }} />
                     </button>
+
+                    {/* 右側: スペーサー（バランス用） */}
+                    <div className="w-20"></div>
                 </div>
 
                 {error && (

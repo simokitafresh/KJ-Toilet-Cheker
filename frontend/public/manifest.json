@@ -1,13 +1,19 @@
 {
-  "name": "Toilet Check Capture",
-  "short_name": "ToiletCapture",
+  "name": "Toilet Checker",
+  "short_name": "ToiletChecker",
   "description": "Toilet check capture app",
   "scope": "/capture",
   "start_url": "/capture",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#0d9488",
   "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
