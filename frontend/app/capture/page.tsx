@@ -51,7 +51,7 @@ export default function CapturePage() {
     };
 
     useEffect(() => {
-        // Load master data
+        // マスターデータの読み込み
         Promise.all([api.getStaff(), api.getToilets()])
             .then(([staffData, toiletData]) => {
                 setStaffList(staffData);
@@ -118,7 +118,7 @@ export default function CapturePage() {
             formData.append('toilet_id', selectedToiletId.toString());
             formData.append('staff_id', staffId.toString());
 
-            // Generate UUID if not exists
+            // デバイスUUIDの取得または生成
             let deviceUuid = localStorage.getItem('device_uuid');
             if (!deviceUuid) {
                 deviceUuid = crypto.randomUUID();
@@ -148,7 +148,7 @@ export default function CapturePage() {
 
     if (step === 'camera') {
         return (
-            <div className="h-screen bg-slate-50 text-slate-800 flex flex-col overflow-hidden">
+            <div className="camera-container bg-slate-800 text-slate-800">
                 {/* トイレ選択（複数ある場合のみ） */}
                 {toilets.length > 1 && (
                     <div className="flex-shrink-0 bg-white px-4 py-2 border-b border-slate-200">
@@ -165,7 +165,7 @@ export default function CapturePage() {
                 )}
 
                 {/* カメラプレビュー - 残りスペースを使用 */}
-                <div className="flex-1 min-h-0 relative bg-slate-800 flex items-center justify-center">
+                <div className="flex-1 min-h-0 relative flex items-center justify-center overflow-hidden">
                     {cameraError ? (
                         <div className="text-center p-4">
                             <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
@@ -183,7 +183,7 @@ export default function CapturePage() {
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                         />
                     )}
 
@@ -196,11 +196,11 @@ export default function CapturePage() {
                 </div>
 
                 {/* フッター - シャッターボタンと撮影枚数 */}
-                <div className="flex-shrink-0 bg-teal-600 p-3 flex items-center justify-between safe-area-bottom">
+                <div className="flex-shrink-0 bg-teal-600 px-4 py-2 flex items-center justify-between safe-area-bottom">
                     {/* 左側: 撮影枚数 */}
-                    <div className="text-white w-20">
-                        <span className="text-2xl font-bold">{images.length}</span>
-                        <span className="text-teal-100">/2枚</span>
+                    <div className="text-white w-16">
+                        <span className="text-xl font-bold">{images.length}</span>
+                        <span className="text-teal-100 text-sm">/2枚</span>
                     </div>
 
                     {/* 中央: シャッターボタン */}
@@ -208,13 +208,13 @@ export default function CapturePage() {
                         onClick={capturePhoto}
                         disabled={!cameraReady}
                         className="rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed bg-white"
-                        style={{ width: '64px', height: '64px' }}
+                        style={{ width: '56px', height: '56px' }}
                     >
-                        <div className="bg-teal-600 rounded-full" style={{ width: '52px', height: '52px' }} />
+                        <div className="bg-teal-600 rounded-full" style={{ width: '44px', height: '44px' }} />
                     </button>
 
                     {/* 右側: スペーサー（バランス用） */}
-                    <div className="w-20"></div>
+                    <div className="w-16"></div>
                 </div>
 
                 {error && (
