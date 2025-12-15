@@ -34,8 +34,9 @@ export const api = {
     },
 
     // Simple Status (New Alert System)
-    getSimpleStatus: async (): Promise<SimpleStatusResponse> => {
-        const res = await fetch(`${API_BASE}/dashboard/simple-status`);
+    getSimpleStatus: async (date?: string): Promise<SimpleStatusResponse> => {
+        const params = date ? `?date_str=${date}` : '';
+        const res = await fetch(`${API_BASE}/dashboard/simple-status${params}`);
         if (!res.ok) throw new Error('Failed to fetch simple status');
         return res.json();
     },

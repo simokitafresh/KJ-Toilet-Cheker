@@ -5,10 +5,44 @@ from app.core.config import settings
 from app.api import checks, dashboard, admin, master
 from app.db.base import Base
 from app.db.session import engine
+from sqlalchemy import text
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+# Run migrations (safe to run multiple times)
+def run_auto_migrations():
+    """Add missing columns on startup"""
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        # Add major_checkpoint_id column if not exists
+        db.execute(text("""
+            ALTER TABLE toilet_checks 
+            ADD COLUMN IF NOT EXISTS major_checkpoint_id INTEGER 
+            REFERENCES major_checkpoints(id)
+        """))
+        db.commit()
+        logger.info("Migration: major_checkpoint_id column OK")
+        
+        # Make staff_id nullable if not already
+        db.execute(text("""
+            ALTER TABLE toilet_checks 
+            ALTER COLUMN staff_id DROP NOT NULL
+        """))
+        db.commit()
+        logger.info("Migration: staff_id nullable OK")
+    except Exception as e:
+        db.rollback()
+        logger.info(f"Migration: {e} (may already be applied)")
+    finally:
+        db.close()
+
+run_auto_migrations()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

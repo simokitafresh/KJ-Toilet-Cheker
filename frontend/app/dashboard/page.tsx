@@ -1,10 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus } from '@/lib/types';
+import { useIdleTimeout } from '@/lib/useIdleTimeout';
 import clsx from 'clsx';
-import { X } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// 日付ユーティリティ
+function formatDateJp(date: Date): string {
+    const days = ['日', '月', '火', '水', '木', '金', '土'];
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const dayOfWeek = days[date.getDay()];
+    return `${month}月${day}日（${dayOfWeek}）`;
+}
+
+function toDateString(date: Date): string {
+    // ローカルタイムゾーンでYYYY-MM-DD形式に変換
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function isSameDay(d1: Date, d2: Date): boolean {
+    return d1.toDateString() === d2.toDateString();
+}
 
 // ステータスボックスコンポーネント
 interface StatusBoxProps {
@@ -94,10 +116,50 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [modalImage, setModalImage] = useState<string | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [toast, setToast] = useState<string | null>(null);
 
-    const fetchData = async () => {
+    // todayをuseMemoで安定化（日付が変わらない限り再生成しない）
+    const today = useMemo(() => new Date(), []);
+    const isToday = isSameDay(selectedDate, today);
+
+    // トースト表示
+    const showToast = useCallback((message: string) => {
+        setToast(message);
+        setTimeout(() => setToast(null), 3000);
+    }, []);
+
+    // 今日に戻る
+    const goToToday = useCallback(() => {
+        setSelectedDate(new Date());
+    }, []);
+
+    // アイドルタイムアウト（今日以外のとき有効）
+    useIdleTimeout(() => {
+        goToToday();
+        showToast('自動で今日に戻りました');
+    }, !isToday);
+
+    // 前日へ
+    const goToPrevDay = () => {
+        const prev = new Date(selectedDate);
+        prev.setDate(prev.getDate() - 1);
+        setSelectedDate(prev);
+    };
+
+    // 翌日へ
+    const goToNextDay = () => {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() + 1);
+        if (!isSameDay(next, today) && next > today) return;
+        setSelectedDate(next);
+    };
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            const res = await api.getSimpleStatus();
+            const dateStr = toDateString(selectedDate);
+            const res = await api.getSimpleStatus(isToday ? undefined : dateStr);
             setData(res);
             setError(null);
         } catch (err) {
@@ -106,14 +168,16 @@ export default function DashboardPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedDate, isToday]);
 
     useEffect(() => {
         fetchData();
-        // 30秒ごとに自動更新
-        const interval = setInterval(fetchData, 30000);
-        return () => clearInterval(interval);
-    }, []);
+        // 今日の場合のみ30秒ごとに自動更新
+        if (isToday) {
+            const interval = setInterval(fetchData, 30000);
+            return () => clearInterval(interval);
+        }
+    }, [fetchData, isToday]);
 
     if (loading) {
         return (
@@ -133,11 +197,44 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800">
-            {/* Header */}
+            {/* Header with Date Navigation */}
             <div className="sticky top-0 bg-white/90 backdrop-blur-sm z-10 p-4 border-b border-slate-200">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-2">
                     <h1 className="text-lg font-bold text-slate-700">トイレチェック</h1>
-                    <span className="text-sm text-slate-500">{data.current_time} 現在</span>
+                    {data.current_time && (
+                        <span className="text-sm text-slate-500">{data.current_time} 現在</span>
+                    )}
+                </div>
+                {/* Date Navigation */}
+                <div className="flex items-center justify-between">
+                    <button
+                        onClick={goToPrevDay}
+                        className="flex items-center gap-1 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                        <ChevronLeft size={18} />
+                        <span>前日</span>
+                    </button>
+                    <div className="text-center">
+                        <span className={clsx(
+                            "text-base font-semibold",
+                            isToday ? "text-slate-700" : "text-blue-600"
+                        )}>
+                            📅 {formatDateJp(selectedDate)}
+                        </span>
+                    </div>
+                    <button
+                        onClick={goToNextDay}
+                        disabled={isToday}
+                        className={clsx(
+                            "flex items-center gap-1 px-3 py-1 text-sm rounded-lg transition-colors",
+                            isToday
+                                ? "text-slate-300 cursor-not-allowed"
+                                : "text-slate-600 hover:bg-slate-100"
+                        )}
+                    >
+                        <span>翌日</span>
+                        <ChevronRight size={18} />
+                    </button>
                 </div>
             </div>
 
@@ -215,7 +312,7 @@ export default function DashboardPage() {
                         </table>
                     ) : (
                         <div className="px-4 py-8 text-center text-slate-400">
-                            本日のチェック記録はありません
+                            {isToday ? '本日のチェック記録はありません' : 'この日のチェック記録はありません'}
                         </div>
                     )}
                 </div>
@@ -223,6 +320,24 @@ export default function DashboardPage() {
 
             {/* 画像モーダル */}
             <ImageModal imageUrl={modalImage} onClose={() => setModalImage(null)} />
+
+            {/* 今日に戻るフローティングボタン */}
+            {!isToday && (
+                <button
+                    onClick={goToToday}
+                    className="fixed bottom-6 right-6 bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-full shadow-lg transition-colors flex items-center gap-2 z-20"
+                >
+                    <span>📍</span>
+                    <span>今日に戻る</span>
+                </button>
+            )}
+
+            {/* トースト通知 */}
+            {toast && (
+                <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg z-30 animate-fade-in">
+                    {toast}
+                </div>
+            )}
         </div>
     );
 }

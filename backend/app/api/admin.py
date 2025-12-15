@@ -154,3 +154,40 @@ def update_setting(key: str, setting: ClinicConfigUpdate, db: Session = Depends(
     db.commit()
     db.refresh(db_setting)
     return db_setting
+
+# --- Migration ---
+@router.post("/migrate")
+def run_migration(db: Session = Depends(deps.get_db)):
+    """
+    Run database migrations for new columns.
+    Safe to run multiple times (idempotent).
+    """
+    from sqlalchemy import text
+    results = []
+    
+    # Add major_checkpoint_id column if not exists
+    try:
+        db.execute(text("""
+            ALTER TABLE toilet_checks 
+            ADD COLUMN IF NOT EXISTS major_checkpoint_id INTEGER 
+            REFERENCES major_checkpoints(id)
+        """))
+        db.commit()
+        results.append("major_checkpoint_id: added or already exists")
+    except Exception as e:
+        db.rollback()
+        results.append(f"major_checkpoint_id: error - {str(e)}")
+    
+    # Make staff_id nullable if not already
+    try:
+        db.execute(text("""
+            ALTER TABLE toilet_checks 
+            ALTER COLUMN staff_id DROP NOT NULL
+        """))
+        db.commit()
+        results.append("staff_id: made nullable")
+    except Exception as e:
+        db.rollback()
+        results.append(f"staff_id: already nullable or error - {str(e)}")
+    
+    return {"ok": True, "results": results}

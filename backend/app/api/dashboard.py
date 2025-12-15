@@ -229,20 +229,40 @@ def detect_and_insert_missed_checkpoints(db: Session, target_date: date, now_jst
 
 
 @router.get("/simple-status", response_model=SimpleStatusResponse)
-def get_simple_status(db: Session = Depends(deps.get_db)):
+def get_simple_status(
+    date_str: Optional[str] = None,  # YYYY-MM-DD format, defaults to today
+    db: Session = Depends(deps.get_db)
+):
     """
     シンプルなアラート状態を返す（トイレ1つ前提）
+    date_str: 対象日付（省略時は今日）
     """
     now_utc = datetime.now(timezone.utc)
     now_jst = now_utc.astimezone(JST)
-    today = now_jst.date()
     
-    # 未実施チェックポイントを検出・挿入
-    detect_and_insert_missed_checkpoints(db, today, now_jst)
+    # 対象日付を決定
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        target_date = now_jst.date()
     
-    # 本日のチェックを取得（MISSED_MAJOR含む）
+    is_today = target_date == now_jst.date()
+    is_future = target_date > now_jst.date()
+    
+    # 未来の日付は許可しない
+    if is_future:
+        raise HTTPException(status_code=400, detail="Future dates are not allowed")
+    
+    # 未実施チェックポイントを検出・挿入（今日のみ）
+    if is_today:
+        detect_and_insert_missed_checkpoints(db, target_date, now_jst)
+    
+    # 対象日のチェックを取得（MISSED_MAJOR含む）
     day_checks = db.query(ToiletCheck).filter(
-        func.date(ToiletCheck.checked_at) == today
+        func.date(ToiletCheck.checked_at) == target_date
     ).order_by(ToiletCheck.checked_at).all()
     
     # 通常チェックのみ抽出（状態判定用）
@@ -258,8 +278,15 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
     morning_checks = [c for c in normal_checks 
                       if morning_start <= to_jst(c.checked_at).time() < afternoon_start]
     
+    # 過去日の場合は「1日の終わり」として判定
+    if is_today:
+        reference_jst = now_jst
+    else:
+        # 過去日：その日の23:59として判定
+        reference_jst = datetime.combine(target_date, time(23, 59)).replace(tzinfo=JST)
+    
     morning_status = calculate_scheduled_check_status(
-        morning_checks, morning_start, morning_deadline, now_jst
+        morning_checks, morning_start, morning_deadline, reference_jst
     )
     
     # 午後チェック判定（14:00〜のチェックを対象）
@@ -267,12 +294,22 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
                         if to_jst(c.checked_at).time() >= afternoon_start]
     
     afternoon_status = calculate_scheduled_check_status(
-        afternoon_checks, afternoon_start, afternoon_deadline, now_jst
+        afternoon_checks, afternoon_start, afternoon_deadline, reference_jst
     )
     
     # 定期チェック判定（通常チェックのみ）
     last_check = normal_checks[-1] if normal_checks else None
-    regular_status = calculate_regular_check_status(last_check, now_jst)
+    if is_today:
+        regular_status = calculate_regular_check_status(last_check, now_jst)
+    else:
+        # 過去日：定期チェックは非アクティブ
+        regular_status = RegularCheckStatus(
+            status="ok",
+            minutes_elapsed=0,
+            next_check_in=0,
+            threshold=settings.REGULAR_CHECK_INTERVAL_MINUTES,
+            is_active=False
+        )
     
     # タイムライン作成（新しい順、MISSED_MAJOR含む）
     timeline = []
@@ -310,9 +347,12 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
     if last_check:
         last_check_at = to_jst(last_check.checked_at).isoformat()
     
+    # 過去日のcurrent_timeは空
+    display_time = now_jst.strftime("%H:%M") if is_today else ""
+    
     return SimpleStatusResponse(
-        date=today.isoformat(),
-        current_time=now_jst.strftime("%H:%M"),
+        date=target_date.isoformat(),
+        current_time=display_time,
         morning_check=morning_status,
         afternoon_check=afternoon_status,
         regular_check=regular_status,
