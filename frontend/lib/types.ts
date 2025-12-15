@@ -82,8 +82,11 @@ export interface RegularCheckStatus {
 }
 
 export interface SimpleTimelineItem {
+    check_id: number;
     time: string;
     staff_icon: string;
+    thumbnails: string[];
+    is_missed: boolean;
 }
 
 export interface SimpleStatusResponse {

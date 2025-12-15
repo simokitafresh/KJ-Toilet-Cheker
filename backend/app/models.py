@@ -48,15 +48,17 @@ class ToiletCheck(Base):
     id = Column(Integer, primary_key=True, index=True)
     toilet_id = Column(Integer, ForeignKey("toilets.id"), nullable=False)
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
-    staff_id = Column(Integer, ForeignKey("staff.id"), nullable=False)
+    staff_id = Column(Integer, ForeignKey("staff.id"), nullable=True)  # NULL for MISSED_MAJOR
+    major_checkpoint_id = Column(Integer, ForeignKey("major_checkpoints.id"), nullable=True)  # For MISSED_MAJOR
     checked_at = Column(DateTime(timezone=True), nullable=False)
     interval_sec_from_prev = Column(Integer, nullable=True)
-    status_type = Column(String(20), nullable=False) # NORMAL, TOO_SHORT, TOO_LONG
+    status_type = Column(String(20), nullable=False) # NORMAL, TOO_SHORT, TOO_LONG, MISSED_MAJOR
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     toilet = relationship("Toilet", back_populates="checks")
     device = relationship("Device", back_populates="checks")
     staff = relationship("Staff", back_populates="checks")
+    major_checkpoint = relationship("MajorCheckpoint")
     images = relationship("CheckImage", back_populates="check", cascade="all, delete-orphan")
 
 class CheckImage(Base):

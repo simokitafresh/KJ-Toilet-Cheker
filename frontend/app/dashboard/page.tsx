@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus } from '@/lib/types';
 import clsx from 'clsx';
+import { X } from 'lucide-react';
 
 // ステータスボックスコンポーネント
 interface StatusBoxProps {
@@ -39,6 +40,36 @@ function StatusBox({ label, status, display }: StatusBoxProps) {
     );
 }
 
+// 画像モーダルコンポーネント
+interface ImageModalProps {
+    imageUrl: string | null;
+    onClose: () => void;
+}
+
+function ImageModal({ imageUrl, onClose }: ImageModalProps) {
+    if (!imageUrl) return null;
+
+    return (
+        <div
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <button
+                className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2"
+                onClick={onClose}
+            >
+                <X size={24} />
+            </button>
+            <img
+                src={imageUrl}
+                alt="拡大画像"
+                className="max-w-full max-h-full object-contain rounded-lg"
+                onClick={(e) => e.stopPropagation()}
+            />
+        </div>
+    );
+}
+
 // 朝/午後チェック用の表示文字列生成
 function getScheduledDisplay(check: ScheduledCheckStatus): string {
     if (check.status === 'pending') {
@@ -62,6 +93,7 @@ export default function DashboardPage() {
     const [data, setData] = useState<SimpleStatusResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [modalImage, setModalImage] = useState<string | null>(null);
 
     const fetchData = async () => {
         try {
@@ -134,22 +166,51 @@ export default function DashboardPage() {
                     <div className="px-4 py-2 bg-slate-50 border-b border-slate-200">
                         <h2 className="text-sm font-semibold text-slate-600">本日のチェック履歴</h2>
                     </div>
-                    
+
                     {data.timeline.length > 0 ? (
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-100">
-                                    <th className="px-4 py-2 text-left text-xs text-slate-500 font-medium">時刻</th>
-                                    <th className="px-4 py-2 text-left text-xs text-slate-500 font-medium">担当</th>
+                                    <th className="px-3 py-2 text-left text-xs text-slate-500 font-medium">時刻</th>
+                                    <th className="px-3 py-2 text-left text-xs text-slate-500 font-medium">担当</th>
+                                    <th className="px-3 py-2 text-left text-xs text-slate-500 font-medium">画像</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.timeline.map((item, idx) => (
-                                    <tr key={idx} className="border-b border-slate-50 last:border-0">
-                                        <td className="px-4 py-3 font-mono text-slate-700">{item.time}</td>
-                                        <td className="px-4 py-3 text-2xl">{item.staff_icon}</td>
-                                    </tr>
-                                ))}
+                                {data.timeline.map((item) => {
+                                    const isMissed = item.is_missed;
+                                    return (
+                                        <tr
+                                            key={item.check_id}
+                                            className={clsx(
+                                                "border-b border-slate-50 last:border-0",
+                                                isMissed && "bg-red-50"
+                                            )}
+                                        >
+                                            <td className={clsx(
+                                                "px-3 py-2 font-mono",
+                                                isMissed ? "text-red-700 font-semibold" : "text-slate-700"
+                                            )}>{item.time}</td>
+                                            <td className="px-3 py-2 text-2xl">{item.staff_icon}</td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex gap-1">
+                                                    {item.thumbnails.map((url, i) => (
+                                                        <img
+                                                            key={i}
+                                                            src={url}
+                                                            alt={`写真${i + 1}`}
+                                                            className="w-10 h-10 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-slate-200"
+                                                            onClick={() => setModalImage(url)}
+                                                        />
+                                                    ))}
+                                                    {item.thumbnails.length === 0 && (
+                                                        <span className="text-slate-300 text-sm">-</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     ) : (
@@ -159,6 +220,9 @@ export default function DashboardPage() {
                     )}
                 </div>
             </div>
+
+            {/* 画像モーダル */}
+            <ImageModal imageUrl={modalImage} onClose={() => setModalImage(null)} />
         </div>
     );
 }

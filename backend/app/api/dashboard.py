@@ -172,6 +172,61 @@ def calculate_regular_check_status(
         is_active=is_active
     )
 
+def detect_and_insert_missed_checkpoints(db: Session, target_date: date, now_jst: datetime) -> None:
+    """
+    時間帯が終了した主要チェックポイントで未実施のものを検出し、
+    MISSED_MAJORレコードを自動挿入する
+    """
+    # 本日のみ処理（過去日は処理しない）
+    if target_date != now_jst.date():
+        return
+    
+    # アクティブな主要チェックポイントを取得
+    checkpoints = db.query(MajorCheckpoint).filter(MajorCheckpoint.is_active == True).all()
+    
+    for cp in checkpoints:
+        # 時間帯が終了していない場合はスキップ
+        if now_jst.time() <= cp.end_time:
+            continue
+        
+        # この時間帯のチェックを検索
+        start_dt = datetime.combine(target_date, cp.start_time).replace(tzinfo=JST)
+        end_dt = datetime.combine(target_date, cp.end_time).replace(tzinfo=JST)
+        
+        existing_check = db.query(ToiletCheck).filter(
+            func.date(ToiletCheck.checked_at) == target_date,
+            ToiletCheck.checked_at >= start_dt,
+            ToiletCheck.checked_at <= end_dt
+        ).first()
+        
+        if existing_check:
+            continue  # チェック済み
+        
+        # 既にMISSED_MAJORレコードが挿入されていないか確認
+        existing_missed = db.query(ToiletCheck).filter(
+            func.date(ToiletCheck.checked_at) == target_date,
+            ToiletCheck.major_checkpoint_id == cp.id,
+            ToiletCheck.status_type == "MISSED_MAJOR"
+        ).first()
+        
+        if existing_missed:
+            continue  # 既に挿入済み
+        
+        # MISSED_MAJORレコードを挿入
+        # トイレIDはチェックポイントのtarget_toilet_idを使用、なければデフォルト1
+        toilet_id = cp.target_toilet_id or 1
+        
+        missed_check = ToiletCheck(
+            toilet_id=toilet_id,
+            staff_id=None,  # スタッフなし
+            major_checkpoint_id=cp.id,
+            checked_at=end_dt,  # 時間帯終了時刻
+            status_type="MISSED_MAJOR"
+        )
+        db.add(missed_check)
+    
+    db.commit()
+
 
 @router.get("/simple-status", response_model=SimpleStatusResponse)
 def get_simple_status(db: Session = Depends(deps.get_db)):
@@ -182,10 +237,16 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
     now_jst = now_utc.astimezone(JST)
     today = now_jst.date()
     
-    # 本日のチェックを取得
+    # 未実施チェックポイントを検出・挿入
+    detect_and_insert_missed_checkpoints(db, today, now_jst)
+    
+    # 本日のチェックを取得（MISSED_MAJOR含む）
     day_checks = db.query(ToiletCheck).filter(
         func.date(ToiletCheck.checked_at) == today
     ).order_by(ToiletCheck.checked_at).all()
+    
+    # 通常チェックのみ抽出（状態判定用）
+    normal_checks = [c for c in day_checks if c.status_type != "MISSED_MAJOR"]
     
     # 時刻設定を取得
     morning_start = parse_time(settings.MORNING_CHECK_START)
@@ -194,7 +255,7 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
     afternoon_deadline = parse_time(settings.AFTERNOON_CHECK_DEADLINE)
     
     # 朝チェック判定（8:00〜14:00のチェックを対象）
-    morning_checks = [c for c in day_checks 
+    morning_checks = [c for c in normal_checks 
                       if morning_start <= to_jst(c.checked_at).time() < afternoon_start]
     
     morning_status = calculate_scheduled_check_status(
@@ -202,28 +263,49 @@ def get_simple_status(db: Session = Depends(deps.get_db)):
     )
     
     # 午後チェック判定（14:00〜のチェックを対象）
-    afternoon_checks = [c for c in day_checks 
+    afternoon_checks = [c for c in normal_checks 
                         if to_jst(c.checked_at).time() >= afternoon_start]
     
     afternoon_status = calculate_scheduled_check_status(
         afternoon_checks, afternoon_start, afternoon_deadline, now_jst
     )
     
-    # 定期チェック判定
-    last_check = day_checks[-1] if day_checks else None
+    # 定期チェック判定（通常チェックのみ）
+    last_check = normal_checks[-1] if normal_checks else None
     regular_status = calculate_regular_check_status(last_check, now_jst)
     
-    # タイムライン作成（新しい順）
+    # タイムライン作成（新しい順、MISSED_MAJOR含む）
     timeline = []
     for check in reversed(day_checks):
         check_jst = to_jst(check.checked_at)
-        staff_icon = check.staff.icon_code if check.staff else "❓"
+        
+        # MISSED_MAJORの場合は特別表示
+        if check.status_type == "MISSED_MAJOR":
+            cp_name = check.major_checkpoint.name if check.major_checkpoint else "チェック"
+            staff_icon = "⚠️"
+            display_time = f"{check_jst.strftime('%H:%M')} {cp_name}未"
+        else:
+            staff_icon = check.staff.icon_code if check.staff else "❓"
+            display_time = check_jst.strftime("%H:%M")
+        
+        # Generate thumbnail URLs
+        thumbs = []
+        sorted_images = sorted(check.images, key=lambda x: x.order_index)
+        for img in sorted_images[:2]:  # First 2 images
+            rel_path = os.path.relpath(img.image_path, settings.IMAGE_STORAGE_PATH)
+            rel_path = rel_path.replace("\\", "/")
+            url = f"/images/{rel_path}"
+            thumbs.append(url)
+        
         timeline.append(SimpleTimelineItem(
-            time=check_jst.strftime("%H:%M"),
-            staff_icon=staff_icon
+            check_id=check.id,
+            time=display_time,
+            staff_icon=staff_icon,
+            thumbnails=thumbs,
+            is_missed=(check.status_type == "MISSED_MAJOR")
         ))
     
-    # 最終チェック時刻
+    # 最終チェック時刻（通常チェックのみ）
     last_check_at = None
     if last_check:
         last_check_at = to_jst(last_check.checked_at).isoformat()

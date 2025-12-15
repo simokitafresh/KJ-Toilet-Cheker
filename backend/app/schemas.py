@@ -152,8 +152,11 @@ class RegularCheckStatus(BaseModel):
     is_active: bool
 
 class SimpleTimelineItem(BaseModel):
+    check_id: int  # For image fetching
     time: str  # HH:MM
     staff_icon: str
+    thumbnails: List[str]  # Image URLs
+    is_missed: bool = False  # MISSED_MAJOR flag
 
 class SimpleStatusResponse(BaseModel):
     date: str  # YYYY-MM-DD
