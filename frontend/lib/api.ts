@@ -1,6 +1,6 @@
 import { Staff, Toilet, DashboardDayResponse, StaffCreate, StaffUpdate, ToiletCreate, SimpleStatusResponse } from './types';
 
-const API_HOST = process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000';
+export const API_HOST = process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000';
 const API_BASE = `${API_HOST}/api`;
 
 export const api = {

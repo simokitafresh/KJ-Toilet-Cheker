@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '@/lib/api';
+import { api, API_HOST } from '@/lib/api';
 import { SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus } from '@/lib/types';
 import { useIdleTimeout } from '@/lib/useIdleTimeout';
 import clsx from 'clsx';
@@ -155,8 +155,8 @@ export default function DashboardPage() {
         setSelectedDate(next);
     };
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
+    const fetchData = useCallback(async (showLoading = true) => {
+        if (showLoading) setLoading(true);
         try {
             const dateStr = toDateString(selectedDate);
             const res = await api.getSimpleStatus(isToday ? undefined : dateStr);
@@ -166,15 +166,15 @@ export default function DashboardPage() {
             setError('データの取得に失敗しました');
             console.error(err);
         } finally {
-            setLoading(false);
+            if (showLoading) setLoading(false);
         }
     }, [selectedDate, isToday]);
 
     useEffect(() => {
-        fetchData();
-        // 今日の場合のみ30秒ごとに自動更新
+        fetchData(true);  // 初回は表示
+        // 今日の場合のみ30秒ごとに自動更新（ローディング非表示）
         if (isToday) {
-            const interval = setInterval(fetchData, 30000);
+            const interval = setInterval(() => fetchData(false), 30000);
             return () => clearInterval(interval);
         }
     }, [fetchData, isToday]);
@@ -291,15 +291,18 @@ export default function DashboardPage() {
                                             <td className="px-3 py-2 text-2xl">{item.staff_icon}</td>
                                             <td className="px-3 py-2">
                                                 <div className="flex gap-1">
-                                                    {item.thumbnails.map((url, i) => (
-                                                        <img
-                                                            key={i}
-                                                            src={url}
-                                                            alt={`写真${i + 1}`}
-                                                            className="w-10 h-10 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-slate-200"
-                                                            onClick={() => setModalImage(url)}
-                                                        />
-                                                    ))}
+                                                    {item.thumbnails.map((url, i) => {
+                                                        const fullUrl = `${API_HOST}${url}`;
+                                                        return (
+                                                            <img
+                                                                key={i}
+                                                                src={fullUrl}
+                                                                alt={`写真${i + 1}`}
+                                                                className="w-10 h-10 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity border border-slate-200"
+                                                                onClick={() => setModalImage(fullUrl)}
+                                                            />
+                                                        );
+                                                    })}
                                                     {item.thumbnails.length === 0 && (
                                                         <span className="text-slate-300 text-sm">-</span>
                                                     )}
