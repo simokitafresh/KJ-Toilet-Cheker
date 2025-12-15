@@ -10,7 +10,7 @@ export default function AdminPage() {
     const [password, setPassword] = useState('');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [creds, setCreds] = useState('');
-    const [activeTab, setActiveTab] = useState<'staff' | 'toilets'>('staff');
+    const [activeTab, setActiveTab] = useState<'staff' | 'toilets' | 'settings'>('staff');
 
     // Data
     const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -21,6 +21,12 @@ export default function AdminPage() {
     // Staff Modal State
     const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
     const [editingStaff, setEditingStaff] = useState<Partial<Staff> & { isNew?: boolean }>({});
+
+    // Settings State
+    const [closedDays, setClosedDays] = useState<number[]>([]);
+    const [businessHoursStart, setBusinessHoursStart] = useState('07:00');
+    const [businessHoursEnd, setBusinessHoursEnd] = useState('22:00');
+    const [settingsLoading, setSettingsLoading] = useState(false);
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +45,7 @@ export default function AdminPage() {
         if (isLoggedIn) {
             if (activeTab === 'staff') loadStaff();
             if (activeTab === 'toilets') loadToilets();
+            if (activeTab === 'settings') loadSettings();
         }
     }, [isLoggedIn, activeTab]);
 
@@ -48,6 +55,47 @@ export default function AdminPage() {
         setInactiveStaffList(res.filter((s: Staff) => s.is_active === false));
     };
     const loadToilets = () => api.admin.getToilets(creds).then(setToilets);
+
+    const loadSettings = async () => {
+        setSettingsLoading(true);
+        try {
+            const settings = await api.admin.getSettings(creds);
+            const closedDaysConfig = settings.find(s => s.key === 'closed_days');
+            const startConfig = settings.find(s => s.key === 'business_hours_start');
+            const endConfig = settings.find(s => s.key === 'business_hours_end');
+
+            if (closedDaysConfig && closedDaysConfig.value) {
+                setClosedDays(closedDaysConfig.value.split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d)));
+            }
+            if (startConfig) setBusinessHoursStart(startConfig.value);
+            if (endConfig) setBusinessHoursEnd(endConfig.value);
+        } catch (e) {
+            console.error('Failed to load settings', e);
+        } finally {
+            setSettingsLoading(false);
+        }
+    };
+
+    const saveSettings = async () => {
+        try {
+            await Promise.all([
+                api.admin.updateSetting(creds, 'closed_days', closedDays.join(',')),
+                api.admin.updateSetting(creds, 'business_hours_start', businessHoursStart),
+                api.admin.updateSetting(creds, 'business_hours_end', businessHoursEnd)
+            ]);
+            alert('設定を保存しました');
+        } catch (e) {
+            alert('保存に失敗しました');
+        }
+    };
+
+    const toggleClosedDay = (day: number) => {
+        if (closedDays.includes(day)) {
+            setClosedDays(closedDays.filter(d => d !== day));
+        } else {
+            setClosedDays([...closedDays, day].sort());
+        }
+    };
 
     // Staff Actions
     const openStaffModal = (staff?: Staff) => {
@@ -103,11 +151,11 @@ export default function AdminPage() {
     const moveStaff = async (index: number, direction: 'up' | 'down') => {
         const newList = [...staffList];
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        
+
         if (targetIndex < 0 || targetIndex >= newList.length) return;
 
         [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
-        
+
         const staffIds = newList.map(s => s.id);
         try {
             await api.admin.reorderStaff(creds, staffIds);
@@ -182,6 +230,12 @@ export default function AdminPage() {
                 >
                     トイレ管理
                 </button>
+                <button
+                    className={`px-4 py-2 rounded transition-colors ${activeTab === 'settings' ? 'bg-teal-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
+                    onClick={() => setActiveTab('settings')}
+                >
+                    設定
+                </button>
             </div>
 
             {activeTab === 'staff' && (
@@ -254,7 +308,7 @@ export default function AdminPage() {
                             >
                                 {showInactive ? '▼' : '▶'} 削除済みスタッフを表示 ({inactiveStaffList.length}件)
                             </button>
-                            
+
                             {showInactive && (
                                 <div className="mt-2 grid gap-2">
                                     {inactiveStaffList.map(staff => (
@@ -305,6 +359,82 @@ export default function AdminPage() {
                             </div>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'settings' && (
+                <div>
+                    <div className="mb-6">
+                        <h2 className="text-xl font-bold text-slate-700">診療設定</h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            休診日と診療時間を設定します
+                        </p>
+                    </div>
+
+                    {settingsLoading ? (
+                        <div className="text-center py-8 text-slate-400">読み込み中...</div>
+                    ) : (
+                        <div className="space-y-6">
+                            {/* 休診曜日 */}
+                            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                                <h3 className="font-bold text-slate-700 mb-3">休診曜日</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {['月', '火', '水', '木', '金', '土', '日'].map((name, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => toggleClosedDay(idx)}
+                                            className={`px-4 py-2 rounded-lg border transition-colors ${closedDays.includes(idx)
+                                                ? 'bg-red-100 border-red-300 text-red-700'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    選択した曜日は休診日としてアラートが停止します
+                                </p>
+                            </div>
+
+                            {/* 診療時間 */}
+                            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                                <h3 className="font-bold text-slate-700 mb-3">診療時間</h3>
+                                <div className="flex items-center gap-4">
+                                    <div>
+                                        <label className="block text-sm text-slate-600 mb-1">開始</label>
+                                        <input
+                                            type="time"
+                                            value={businessHoursStart}
+                                            onChange={e => setBusinessHoursStart(e.target.value)}
+                                            className="border border-slate-300 rounded p-2 text-slate-800"
+                                        />
+                                    </div>
+                                    <span className="text-slate-400 mt-6">〜</span>
+                                    <div>
+                                        <label className="block text-sm text-slate-600 mb-1">終了</label>
+                                        <input
+                                            type="time"
+                                            value={businessHoursEnd}
+                                            onChange={e => setBusinessHoursEnd(e.target.value)}
+                                            className="border border-slate-300 rounded p-2 text-slate-800"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    診療時間外はアラートが停止し、メッセージが表示されます
+                                </p>
+                            </div>
+
+                            {/* 保存ボタン */}
+                            <button
+                                onClick={saveSettings}
+                                className="w-full bg-teal-600 text-white py-3 rounded-lg font-bold hover:bg-teal-500 transition-colors shadow-sm"
+                            >
+                                設定を保存
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 

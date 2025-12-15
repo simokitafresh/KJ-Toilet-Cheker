@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     REGULAR_CHECK_INTERVAL_MINUTES: int = 60
     LUNCH_BREAK_START: str = "12:00"
     LUNCH_BREAK_END: str = "14:00"
+    
+    # Business Hours (F003/F004)
+    CLOSED_DAYS: str = "0"  # 0=Sunday, 6=Saturday, comma-separated, empty=no closed days
+    BUSINESS_HOURS_START: str = "07:00"
+    BUSINESS_HOURS_END: str = "22:00"
 
     class Config:
         case_sensitive = True

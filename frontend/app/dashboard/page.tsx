@@ -239,24 +239,46 @@ export default function DashboardPage() {
             </div>
 
             <div className="p-4 space-y-6">
-                {/* アラートボックス 3列 */}
-                <div className="grid grid-cols-3 gap-3">
-                    <StatusBox
-                        label={`朝 〜${data.morning_check.deadline}`}
-                        status={data.morning_check.status}
-                        display={getScheduledDisplay(data.morning_check)}
-                    />
-                    <StatusBox
-                        label={`午後 〜${data.afternoon_check.deadline}`}
-                        status={data.afternoon_check.status}
-                        display={getScheduledDisplay(data.afternoon_check)}
-                    />
-                    <StatusBox
-                        label="定期"
-                        status={data.regular_check.is_active ? data.regular_check.status : 'pending'}
-                        display={getRegularDisplay(data.regular_check)}
-                    />
-                </div>
+                {/* 休診日・診療時間外メッセージ */}
+                {(data.is_closed || data.is_outside_hours) && isToday ? (
+                    <div className="bg-white rounded-lg border border-slate-200 p-6 text-center">
+                        {data.is_closed ? (
+                            <>
+                                <div className="text-4xl mb-3">🏥</div>
+                                <div className="text-lg font-bold text-slate-700 mb-1">本日は休診日です</div>
+                                <div className="text-sm text-slate-500">チェックは不要です</div>
+                            </>
+                        ) : data.business_message ? (
+                            <>
+                                <div className="text-lg font-medium text-slate-700 whitespace-pre-line">
+                                    {data.business_message.split(' ').slice(0, 2).join(' ')}
+                                </div>
+                                <div className="text-sm text-slate-500 mt-2">
+                                    {data.business_message.split(' ').slice(2).join(' ')}
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                ) : (
+                    /* アラートボックス 3列 */
+                    <div className="grid grid-cols-3 gap-3">
+                        <StatusBox
+                            label={`朝 〜${data.morning_check.deadline}`}
+                            status={data.morning_check.status}
+                            display={getScheduledDisplay(data.morning_check)}
+                        />
+                        <StatusBox
+                            label={`午後 〜${data.afternoon_check.deadline}`}
+                            status={data.afternoon_check.status}
+                            display={getScheduledDisplay(data.afternoon_check)}
+                        />
+                        <StatusBox
+                            label="定期"
+                            status={data.regular_check.is_active ? data.regular_check.status : 'pending'}
+                            display={getRegularDisplay(data.regular_check)}
+                        />
+                    </div>
+                )}
 
                 {/* 履歴テーブル */}
                 <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">

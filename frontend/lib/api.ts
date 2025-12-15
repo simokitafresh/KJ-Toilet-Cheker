@@ -138,5 +138,27 @@ export const api = {
             if (!res.ok) throw new Error('Failed to create toilet');
             return res.json();
         },
+
+        // Settings
+        getSettings: async (creds: string): Promise<{ key: string, value: string }[]> => {
+            const res = await fetch(`${API_BASE}/admin/settings`, {
+                headers: { 'Authorization': `Basic ${creds}` }
+            });
+            if (!res.ok) throw new Error('Failed to fetch settings');
+            return res.json();
+        },
+
+        updateSetting: async (creds: string, key: string, value: string) => {
+            const res = await fetch(`${API_BASE}/admin/settings?key=${key}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${creds}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ value })
+            });
+            if (!res.ok) throw new Error('Failed to update setting');
+            return res.json();
+        },
     }
 };

@@ -166,3 +166,8 @@ class SimpleStatusResponse(BaseModel):
     regular_check: RegularCheckStatus
     last_check_at: Optional[str] = None  # ISO format
     timeline: List[SimpleTimelineItem]
+    # F003/F004
+    is_closed: bool = False  # 休診日
+    is_outside_hours: bool = False  # 診療時間外
+    business_message: Optional[str] = None  # 時間帯メッセージ
+

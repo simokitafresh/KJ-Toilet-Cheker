@@ -97,4 +97,8 @@ export interface SimpleStatusResponse {
     regular_check: RegularCheckStatus;
     last_check_at: string | null;
     timeline: SimpleTimelineItem[];
+    // F003/F004
+    is_closed: boolean;
+    is_outside_hours: boolean;
+    business_message: string | null;
 }

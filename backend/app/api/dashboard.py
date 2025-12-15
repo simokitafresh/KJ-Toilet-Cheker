@@ -6,7 +6,7 @@ from datetime import datetime, date, time, timedelta, timezone
 import os
 from app.api import deps
 from app.core.config import settings
-from app.models import ToiletCheck, MajorCheckpoint, Toilet, Staff, CheckImage
+from app.models import ToiletCheck, MajorCheckpoint, Toilet, Staff, CheckImage, ClinicConfig
 from app.schemas import (
     DashboardDayResponse, MajorCheckpointStatus, RealtimeAlert, TimelineItem,
     SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus, SimpleTimelineItem
@@ -350,6 +350,48 @@ def get_simple_status(
     # 過去日のcurrent_timeは空
     display_time = now_jst.strftime("%H:%M") if is_today else ""
     
+    # Helper: Get clinic config from DB with fallback to settings
+    def get_config(key: str, default: str) -> str:
+        config = db.query(ClinicConfig).filter(ClinicConfig.key == key).first()
+        return config.value if config else default
+    
+    # F003: 休診日判定
+    def is_closed_day(target: date) -> bool:
+        closed_days_str = get_config("closed_days", settings.CLOSED_DAYS).strip()
+        if not closed_days_str:
+            return False
+        try:
+            closed_days = [int(d.strip()) for d in closed_days_str.split(",")]
+            return target.weekday() in closed_days  # 0=月曜, 6=日曜
+        except ValueError:
+            return False
+    
+    is_closed = is_closed_day(target_date)
+    
+    # F004: 診療時間外判定
+    def get_business_hours_status(now: datetime, target: date) -> tuple:
+        """Returns (is_outside_hours, message)"""
+        # 過去日は診療時間内扱い
+        if target != now.date():
+            return False, None
+        
+        start_str = get_config("business_hours_start", settings.BUSINESS_HOURS_START)
+        end_str = get_config("business_hours_end", settings.BUSINESS_HOURS_END)
+        start = parse_time(start_str)
+        end = parse_time(end_str)
+        current = now.time()
+        
+        if current < start:
+            # 朝（診療開始前）
+            return True, f"☀️ おはようございます！今日もよろしくお願いします！ 診療開始: {start_str}"
+        elif current > end:
+            # 夜（診療終了後）
+            return True, f"🌙 お疲れさまでした！ゆっくりお休みください 診療時間: {start_str}〜{end_str}"
+        else:
+            return False, None
+    
+    is_outside_hours, business_message = get_business_hours_status(now_jst, target_date)
+    
     return SimpleStatusResponse(
         date=target_date.isoformat(),
         current_time=display_time,
@@ -357,7 +399,10 @@ def get_simple_status(
         afternoon_check=afternoon_status,
         regular_check=regular_status,
         last_check_at=last_check_at,
-        timeline=timeline
+        timeline=timeline,
+        is_closed=is_closed,
+        is_outside_hours=is_outside_hours,
+        business_message=business_message
     )
 
 
