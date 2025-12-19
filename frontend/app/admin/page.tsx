@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Staff, Toilet } from '@/lib/types';
+import { HomeLink } from '@/components/HomeLink';
 import { Trash2, Plus, Edit, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 
 export default function AdminPage() {
@@ -181,7 +182,10 @@ export default function AdminPage() {
 
     if (!isLoggedIn) {
         return (
-            <div className="min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-4">
+                <div className="absolute top-4 left-4">
+                    <HomeLink />
+                </div>
                 <form onSubmit={handleLogin} className="bg-white p-8 rounded-lg shadow-lg w-96 border border-slate-200">
                     <h1 className="text-2xl font-bold mb-6 text-center text-slate-700">管理者ログイン</h1>
                     <div className="mb-4">
@@ -212,6 +216,9 @@ export default function AdminPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800 p-6">
+            <div className="mb-4">
+                <HomeLink />
+            </div>
             <div className="flex justify-between items-center mb-8">
                 <h1 className="text-2xl font-bold text-slate-700">管理パネル</h1>
                 <button onClick={() => setIsLoggedIn(false)} className="text-slate-500 hover:text-slate-800 transition-colors">ログアウト</button>

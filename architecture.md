@@ -1,7 +1,7 @@
 # トイレチェック管理システム - アーキテクチャ詳細
 
-**バージョン:** フェーズA最終版  
-**更新日:** 2024年
+**バージョン:** フェーズA最終版 + 判定ロジック修正  
+**更新日:** 2025-12-19
 
 ---
 
@@ -13,10 +13,12 @@
 4. [API設計](#4-api設計)
 5. [撮影フロー](#5-撮影フロー)
 6. [ステータス判定ロジック](#6-ステータス判定ロジック)
-7. [主要チェックポイント（MAJOR）](#7-主要チェックポイントmajor)
-8. [スタッフアイコン](#8-スタッフアイコン)
-9. [画像保存](#9-画像保存)
-10. [技術スタック](#10-技術スタック)
+7. [朝チェック・午後チェック判定](#7-朝チェック午後チェック判定)
+8. [主要チェックポイント（MAJOR）](#8-主要チェックポイントmajor)
+9. [スタッフアイコン](#9-スタッフアイコン)
+10. [画像保存](#10-画像保存)
+11. [技術スタック](#11-技術スタック)
+12. [テスト](#12-テスト)
 
 ---
 
@@ -475,7 +477,77 @@ NORMAL   interval計算（秒）
 
 ---
 
-## 7. 主要チェックポイント（MAJOR）
+## 7. 朝チェック・午後チェック判定
+
+### 設定値
+
+| 項目 | 開始時刻 | 期限 |
+|------|---------|------|
+| 朝チェック | 08:00 | 08:50 |
+| 午後チェック | 14:00 | 14:50 |
+
+※ 設定値は `backend/app/core/config.py` で管理
+
+### 判定ルール（✅ 2025-12-19 実装済み）
+
+- **有効なチェック**: 開始時刻〜期限内のチェックのみ
+- **期限超過後のチェック**: 無効（アラート継続）
+
+### 判定フロー
+
+```
+チェック時刻
+    │
+    ▼
+┌───────────────────┐
+│ 開始時刻 ≤ 時刻?  │
+└────────┬──────────┘
+         │
+    Yes ─┴─ No
+    │       │
+    ▼       ▼
+┌───────────────┐  ❌ 無効
+│ 時刻 ≤ 期限?  │  （時間帯前）
+└───────┬───────┘
+        │
+   Yes ─┴─ No
+   │       │
+   ▼       ▼
+ ✅ OK   ❌ 無効
+        （期限超過）
+```
+
+### ステータス表示
+
+| ステータス | 条件 | 表示 |
+|-----------|------|------|
+| pending | 現在時刻 < 開始時刻 | ⏳ 待機中 |
+| warning | 開始時刻 ≤ 現在時刻 ≤ 期限 & 未チェック | ⚠️ 警告 |
+| alert | 現在時刻 > 期限 & 未チェック | 🔴 アラート |
+| ok | 時間帯内にチェック完了 | ✅ HH:MM |
+
+### 実装箇所
+
+```python
+# backend/app/api/dashboard.py
+
+# 朝チェック判定（8:00〜8:50のチェックのみ対象）
+morning_checks = [c for c in normal_checks 
+                  if morning_start <= to_jst(c.checked_at).time() <= morning_deadline]
+
+# 午後チェック判定（14:00〜14:50のチェックのみ対象）
+afternoon_checks = [c for c in normal_checks 
+                    if afternoon_start <= to_jst(c.checked_at).time() <= afternoon_deadline]
+
+# calculate_scheduled_check_status関数内
+# 開始時刻以降 かつ 期限以内 のチェックのみ有効
+if start_time <= check_time <= deadline:
+    matched_check = check
+```
+
+---
+
+## 8. 主要チェックポイント（MAJOR）
 
 ### デフォルト設定
 
@@ -529,7 +601,7 @@ NORMAL   interval計算（秒）
 
 ---
 
-## 8. スタッフアイコン
+## 9. スタッフアイコン
 
 ### アイコン一覧（22種類）
 
@@ -553,7 +625,7 @@ NORMAL   interval計算（秒）
 
 ---
 
-## 9. 画像保存
+## 10. 画像保存
 
 ### 処理フロー
 
@@ -621,7 +693,7 @@ NORMAL   interval計算（秒）
 
 ---
 
-## 10. 技術スタック
+## 11. 技術スタック
 
 ### フロントエンド
 
@@ -720,4 +792,54 @@ React Server Components (RSC) + クライアントコンポーネントの最小
 
 ---
 
-*このドキュメントはフェーズA最終版として確定しています。*
+*このドキュメントはフェーズA最終版 + 判定ロジック修正版として更新されています（2025-12-19）。*
+
+---
+
+## 12. テスト
+
+### テストファイル
+
+```
+backend/tests/
+├── __init__.py
+└── test_scheduled_check.py    # 朝チェック・午後チェック判定テスト
+```
+
+### テスト実行
+
+```bash
+cd backend
+python -m pytest tests/test_scheduled_check.py -v
+```
+
+### テストケース（14件）
+
+#### 朝チェック（TestMorningCheck）
+
+| テスト | チェック時刻 | 期待結果 |
+|--------|-------------|---------|
+| test_check_at_0800_should_be_ok | 08:00 | ✅ OK（境界値） |
+| test_check_at_0810_should_be_ok | 08:10 | ✅ OK |
+| test_check_at_0850_should_be_ok | 08:50 | ✅ OK（境界値） |
+| test_check_at_0851_should_not_count | 08:51 | 🔴 無効（期限超過） |
+| test_check_at_0745_should_not_count | 07:45 | 🔴 無効（時間帯前） |
+| test_no_check_before_start_should_be_pending | - | ⏳ pending |
+| test_no_check_during_window_should_be_warning | - | ⚠️ warning |
+| test_no_check_after_deadline_should_be_alert | - | 🔴 alert |
+
+#### 午後チェック（TestAfternoonCheck）
+
+| テスト | チェック時刻 | 期待結果 |
+|--------|-------------|---------|
+| test_check_at_1400_should_be_ok | 14:00 | ✅ OK（境界値） |
+| test_check_at_1410_should_be_ok | 14:10 | ✅ OK |
+| test_check_at_1450_should_be_ok | 14:50 | ✅ OK（境界値） |
+| test_check_at_1451_should_not_count | 14:51 | 🔴 無効（期限超過） |
+| test_check_at_1700_should_not_count | 17:00 | 🔴 無効（期限超過） |
+
+#### time_range（TestTimeRange）
+
+| テスト | 期待結果 |
+|--------|---------|
+| test_time_range_format | "08:00〜08:50" |

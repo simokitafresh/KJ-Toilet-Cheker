@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, API_HOST } from '@/lib/api';
 import { SimpleStatusResponse, ScheduledCheckStatus, RegularCheckStatus } from '@/lib/types';
 import { useIdleTimeout } from '@/lib/useIdleTimeout';
+import { HomeLink } from '@/components/HomeLink';
 import clsx from 'clsx';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -200,10 +201,13 @@ export default function DashboardPage() {
             {/* Header with Date Navigation */}
             <div className="sticky top-0 bg-white/90 backdrop-blur-sm z-10 p-4 border-b border-slate-200">
                 <div className="flex justify-between items-center mb-2">
-                    <h1 className="text-lg font-bold text-slate-700">トイレチェック</h1>
+                    <HomeLink />
                     {data.current_time && (
                         <span className="text-sm text-slate-500">{data.current_time} 現在</span>
                     )}
+                </div>
+                <div className="text-center mb-2">
+                    <h1 className="text-lg font-bold text-slate-700">トイレチェック</h1>
                 </div>
                 {/* Date Navigation */}
                 <div className="flex items-center justify-between">
