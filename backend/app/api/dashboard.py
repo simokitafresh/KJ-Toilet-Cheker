@@ -42,15 +42,17 @@ def calculate_scheduled_check_status(
     - 開始時刻から警告（黄色）
     - 期限を過ぎたらアラート（赤）
     - チェック完了したら時刻表示（OK/緑）
+    - 開始時刻〜期限内のチェックのみ有効
     """
     time_range = f"{start_time.strftime('%H:%M')}〜{deadline.strftime('%H:%M')}"
     
-    # この時間帯以降のチェックを探す（開始時刻以降なら期限超過でもOK）
+    # この時間帯内のチェックを探す（開始時刻〜期限内のみ有効）
     matched_check = None
     for check in checks:
         check_jst = to_jst(check.checked_at)
         check_time = check_jst.time()
-        if check_time >= start_time:
+        # 開始時刻以降 かつ 期限以内 のチェックのみ有効
+        if start_time <= check_time <= deadline:
             matched_check = check
             break
     
@@ -274,9 +276,9 @@ def get_simple_status(
     afternoon_start = parse_time(settings.AFTERNOON_CHECK_START)
     afternoon_deadline = parse_time(settings.AFTERNOON_CHECK_DEADLINE)
     
-    # 朝チェック判定（8:00〜14:00のチェックを対象）
+    # 朝チェック判定（8:00〜8:50のチェックのみ対象）
     morning_checks = [c for c in normal_checks 
-                      if morning_start <= to_jst(c.checked_at).time() < afternoon_start]
+                      if morning_start <= to_jst(c.checked_at).time() <= morning_deadline]
     
     # 過去日の場合は「1日の終わり」として判定
     if is_today:
@@ -289,9 +291,9 @@ def get_simple_status(
         morning_checks, morning_start, morning_deadline, reference_jst
     )
     
-    # 午後チェック判定（14:00〜のチェックを対象）
+    # 午後チェック判定（14:00〜14:50のチェックのみ対象）
     afternoon_checks = [c for c in normal_checks 
-                        if to_jst(c.checked_at).time() >= afternoon_start]
+                        if afternoon_start <= to_jst(c.checked_at).time() <= afternoon_deadline]
     
     afternoon_status = calculate_scheduled_check_status(
         afternoon_checks, afternoon_start, afternoon_deadline, reference_jst
