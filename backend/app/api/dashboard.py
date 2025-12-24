@@ -249,6 +249,11 @@ def get_simple_status(
     """
     now_utc = datetime.now(timezone.utc)
     now_jst = now_utc.astimezone(JST)
+
+    # Helper: Get clinic config from DB with fallback to settings
+    def get_config(key: str, default: str) -> str:
+        config = db.query(ClinicConfig).filter(ClinicConfig.key == key).first()
+        return config.value if config else default
     
     # 対象日付を決定
     if date_str:
@@ -381,10 +386,6 @@ def get_simple_status(
     # 過去日のcurrent_timeは空
     display_time = now_jst.strftime("%H:%M") if is_today else ""
     
-    # Helper: Get clinic config from DB with fallback to settings
-    def get_config(key: str, default: str) -> str:
-        config = db.query(ClinicConfig).filter(ClinicConfig.key == key).first()
-        return config.value if config else default
     
     # F003: 休診日判定
     def is_closed_day(target: date) -> bool:
