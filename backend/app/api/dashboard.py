@@ -35,7 +35,8 @@ def calculate_scheduled_check_status(
     checks: List[ToiletCheck],
     start_time: time,
     deadline: time,
-    now_jst: datetime
+    now_jst: datetime,
+    is_required: bool = True
 ) -> ScheduledCheckStatus:
     """
     朝チェック・午後チェックの状態を計算
@@ -65,7 +66,8 @@ def calculate_scheduled_check_status(
             status="ok",
             time=check_time_str,
             deadline=deadline.strftime("%H:%M"),
-            time_range=time_range
+            time_range=time_range,
+            is_required=is_required
         )
     else:
         # 未実施
@@ -78,13 +80,18 @@ def calculate_scheduled_check_status(
             status = "warning"
         else:
             # 期限超過 → アラート（赤）
-            status = "alert"
+            # ただし不要な場合は待機中のまま（またはdashboard側で「不要」と出すため警告以上にしない）
+            if not is_required:
+                status = "pending"
+            else:
+                status = "alert"
         
         return ScheduledCheckStatus(
             status=status,
             time=None,
             deadline=deadline.strftime("%H:%M"),
-            time_range=time_range
+            time_range=time_range,
+            is_required=is_required
         )
 
 
@@ -303,8 +310,22 @@ def get_simple_status(
     afternoon_checks = [c for c in normal_checks 
                         if afternoon_start <= to_jst(c.checked_at).time() <= afternoon_deadline]
     
+    # 午後チェックが不要な曜日か判定
+    def is_afternoon_skip_day(target: date) -> bool:
+        skip_days_str = get_config("afternoon_check_skip_days", "").strip()
+        if not skip_days_str:
+            return False
+        try:
+            skip_days = [int(d.strip()) for d in skip_days_str.split(",")]
+            return target.weekday() in skip_days
+        except ValueError:
+            return False
+
+    is_afternoon_required = not is_afternoon_skip_day(target_date)
+
     afternoon_status = calculate_scheduled_check_status(
-        afternoon_checks, afternoon_start, afternoon_deadline, reference_jst
+        afternoon_checks, afternoon_start, afternoon_deadline, reference_jst, 
+        is_required=is_afternoon_required
     )
     
     # 定期チェック判定（通常チェックのみ）

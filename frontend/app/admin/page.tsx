@@ -27,6 +27,7 @@ export default function AdminPage() {
     const [closedDays, setClosedDays] = useState<number[]>([]);
     const [businessHoursStart, setBusinessHoursStart] = useState('07:00');
     const [businessHoursEnd, setBusinessHoursEnd] = useState('22:00');
+    const [afternoonSkipDays, setAfternoonSkipDays] = useState<number[]>([]);
     const [settingsLoading, setSettingsLoading] = useState(false);
 
     const handleLogin = (e: React.FormEvent) => {
@@ -64,12 +65,16 @@ export default function AdminPage() {
             const closedDaysConfig = settings.find(s => s.key === 'closed_days');
             const startConfig = settings.find(s => s.key === 'business_hours_start');
             const endConfig = settings.find(s => s.key === 'business_hours_end');
+            const skipDaysConfig = settings.find(s => s.key === 'afternoon_check_skip_days');
 
             if (closedDaysConfig && closedDaysConfig.value) {
                 setClosedDays(closedDaysConfig.value.split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d)));
             }
             if (startConfig) setBusinessHoursStart(startConfig.value);
             if (endConfig) setBusinessHoursEnd(endConfig.value);
+            if (skipDaysConfig && skipDaysConfig.value) {
+                setAfternoonSkipDays(skipDaysConfig.value.split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d)));
+            }
         } catch (e) {
             console.error('Failed to load settings', e);
         } finally {
@@ -82,7 +87,8 @@ export default function AdminPage() {
             await Promise.all([
                 api.admin.updateSetting(creds, 'closed_days', closedDays.join(',')),
                 api.admin.updateSetting(creds, 'business_hours_start', businessHoursStart),
-                api.admin.updateSetting(creds, 'business_hours_end', businessHoursEnd)
+                api.admin.updateSetting(creds, 'business_hours_end', businessHoursEnd),
+                api.admin.updateSetting(creds, 'afternoon_check_skip_days', afternoonSkipDays.join(','))
             ]);
             alert('設定を保存しました');
         } catch (e) {
@@ -430,6 +436,34 @@ export default function AdminPage() {
                                 </div>
                                 <p className="text-xs text-slate-500 mt-2">
                                     診療時間外はアラートが停止し、メッセージが表示されます
+                                </p>
+                            </div>
+
+                            {/* 午後チェック不要曜日 */}
+                            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                                <h3 className="font-bold text-slate-700 mb-3">午後チェック不要曜日</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {['月', '火', '水', '木', '金', '土', '日'].map((name, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                if (afternoonSkipDays.includes(idx)) {
+                                                    setAfternoonSkipDays(afternoonSkipDays.filter(d => d !== idx));
+                                                } else {
+                                                    setAfternoonSkipDays([...afternoonSkipDays, idx].sort());
+                                                }
+                                            }}
+                                            className={`px-4 py-2 rounded-lg border transition-colors ${afternoonSkipDays.includes(idx)
+                                                ? 'bg-blue-100 border-blue-300 text-blue-700'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    選択した曜日は午後の主要チェック（14:00〜14:50）のアラートが停止します
                                 </p>
                             </div>
 

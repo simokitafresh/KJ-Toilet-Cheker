@@ -143,6 +143,7 @@ class ScheduledCheckStatus(BaseModel):
     time: Optional[str] = None  # HH:MM
     deadline: str  # HH:MM
     time_range: str  # "08:00〜08:50"
+    is_required: bool = True
 
 class RegularCheckStatus(BaseModel):
     status: str  # ok, warning, alert

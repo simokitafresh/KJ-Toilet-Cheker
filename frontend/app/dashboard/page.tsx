@@ -95,11 +95,14 @@ function ImageModal({ imageUrl, onClose }: ImageModalProps) {
 
 // 朝/午後チェック用の表示文字列生成
 function getScheduledDisplay(check: ScheduledCheckStatus): string {
-    if (check.status === 'pending') {
-        return '待機中';
-    }
     if (check.time) {
         return check.time;
+    }
+    if (!check.is_required) {
+        return '不要';
+    }
+    if (check.status === 'pending') {
+        return '待機中';
     }
     return '未';
 }

@@ -71,6 +71,7 @@ export interface ScheduledCheckStatus {
     time: string | null;
     deadline: string;
     time_range: string;
+    is_required: boolean;
 }
 
 export interface RegularCheckStatus {
