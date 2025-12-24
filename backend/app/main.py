@@ -11,38 +11,52 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
-
 # Run migrations (safe to run multiple times)
 def run_auto_migrations():
-    """Add missing columns on startup"""
+    """Add missing columns on startup in a cross-platform way"""
     from app.db.session import SessionLocal
+    from sqlalchemy import inspect
     db = SessionLocal()
     try:
-        # Add major_checkpoint_id column if not exists
-        db.execute(text("""
-            ALTER TABLE toilet_checks 
-            ADD COLUMN IF NOT EXISTS major_checkpoint_id INTEGER 
-            REFERENCES major_checkpoints(id)
-        """))
-        db.commit()
-        logger.info("Migration: major_checkpoint_id column OK")
+        inspector = inspect(engine)
+        columns = [c["name"] for c in inspector.get_columns("toilet_checks")]
         
-        # Make staff_id nullable if not already
-        db.execute(text("""
-            ALTER TABLE toilet_checks 
-            ALTER COLUMN staff_id DROP NOT NULL
-        """))
-        db.commit()
-        logger.info("Migration: staff_id nullable OK")
+        # Add major_checkpoint_id column if not exists
+        if "major_checkpoint_id" not in columns:
+            try:
+                # SQLite doesn't support IF NOT EXISTS in ALTER TABLE
+                db.execute(text("""
+                    ALTER TABLE toilet_checks 
+                    ADD COLUMN major_checkpoint_id INTEGER 
+                    REFERENCES major_checkpoints(id)
+                """))
+                db.commit()
+                logger.info("Migration: major_checkpoint_id column added")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Migration error adding major_checkpoint_id: {e}")
+        
+        # Make staff_id nullable (SQLite doesn't support ALTER COLUMN DROP NOT NULL easily,
+        # but SQLAlchemy's create_all should handle the schema if it's a fresh DB.
+        # For existing Postgres DBs, we try the ALTER command)
+        if engine.dialect.name == "postgresql":
+            try:
+                db.execute(text("ALTER TABLE toilet_checks ALTER COLUMN staff_id DROP NOT NULL"))
+                db.commit()
+                logger.info("Migration: staff_id nullable OK (PostgreSQL)")
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"Migration: staff_id nullable already set or error: {e}")
+                
     except Exception as e:
-        db.rollback()
-        logger.info(f"Migration: {e} (may already be applied)")
+        logger.error(f"Migration runner error: {e}")
     finally:
         db.close()
 
-run_auto_migrations()
+# Create tables and run migrations only if not in test mode
+if os.getenv("TEST_MODE") != "1":
+    Base.metadata.create_all(bind=engine)
+    run_auto_migrations()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

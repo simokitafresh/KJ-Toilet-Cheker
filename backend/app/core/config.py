@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     LUNCH_BREAK_END: str = "14:00"
     
     # Business Hours (F003/F004)
-    CLOSED_DAYS: str = "0"  # 0=Monday, 6=Sunday, comma-separated, empty=no closed days
+    CLOSED_DAYS: str = ""  # 0=Monday, 6=Sunday, comma-separated, empty=no closed days
     BUSINESS_HOURS_START: str = "07:00"
     BUSINESS_HOURS_END: str = "22:00"
 

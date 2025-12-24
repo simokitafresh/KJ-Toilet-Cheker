@@ -192,13 +192,14 @@ def detect_and_insert_missed_checkpoints(db: Session, target_date: date, now_jst
             continue
         
         # この時間帯のチェックを検索
-        start_dt = datetime.combine(target_date, cp.start_time).replace(tzinfo=JST)
-        end_dt = datetime.combine(target_date, cp.end_time).replace(tzinfo=JST)
+        start_dt_jst = datetime.combine(target_date, cp.start_time).replace(tzinfo=JST)
+        end_dt_jst = datetime.combine(target_date, cp.end_time).replace(tzinfo=JST)
         
         existing_check = db.query(ToiletCheck).filter(
-            func.date(ToiletCheck.checked_at) == target_date,
-            ToiletCheck.checked_at >= start_dt,
-            ToiletCheck.checked_at <= end_dt
+            and_(
+                ToiletCheck.checked_at >= start_dt_jst.astimezone(timezone.utc),
+                ToiletCheck.checked_at <= end_dt_jst.astimezone(timezone.utc)
+            )
         ).first()
         
         if existing_check:
@@ -262,9 +263,16 @@ def get_simple_status(
     if is_today:
         detect_and_insert_missed_checkpoints(db, target_date, now_jst)
     
+    # 対象日の開始と終了（JST）をUTCに変換して範囲指定で取得
+    start_jst = datetime.combine(target_date, time.min).replace(tzinfo=JST)
+    end_jst = start_jst + timedelta(days=1)
+    
     # 対象日のチェックを取得（MISSED_MAJOR含む）
     day_checks = db.query(ToiletCheck).filter(
-        func.date(ToiletCheck.checked_at) == target_date
+        and_(
+            ToiletCheck.checked_at >= start_jst.astimezone(timezone.utc),
+            ToiletCheck.checked_at < end_jst.astimezone(timezone.utc)
+        )
     ).order_by(ToiletCheck.checked_at).all()
     
     # 通常チェックのみ抽出（状態判定用）
@@ -364,7 +372,8 @@ def get_simple_status(
             return False
         try:
             closed_days = [int(d.strip()) for d in closed_days_str.split(",")]
-            return target.weekday() in closed_days  # 0=月曜, 6=日曜
+            # Pythonのweekday()は 0=月曜, 6=日曜
+            return target.weekday() in closed_days
         except ValueError:
             return False
     
@@ -423,8 +432,17 @@ def get_dashboard_day(
     major_checkpoints = db.query(MajorCheckpoint).filter(MajorCheckpoint.is_active == True).order_by(MajorCheckpoint.display_order).all()
     checkpoint_statuses = []
     
-    # Get all checks for the day
-    day_checks_query = db.query(ToiletCheck).filter(func.date(ToiletCheck.checked_at) == target_date)
+    # 対象日の開始と終了（JST）をUTCに変換して範囲指定で取得
+    start_jst = datetime.combine(target_date, time.min).replace(tzinfo=JST)
+    end_jst = start_jst + timedelta(days=1)
+
+    # Get all checks for the day within the JST range
+    day_checks_query = db.query(ToiletCheck).filter(
+        and_(
+            ToiletCheck.checked_at >= start_jst.astimezone(timezone.utc),
+            ToiletCheck.checked_at < end_jst.astimezone(timezone.utc)
+        )
+    )
     if toilet_id:
         day_checks_query = day_checks_query.filter(ToiletCheck.toilet_id == toilet_id)
     day_checks = day_checks_query.all()
