@@ -161,6 +161,7 @@ def run_migration(db: Session = Depends(deps.get_db)):
     """
     Run database migrations for new columns.
     Safe to run multiple times (idempotent).
+    NOTE: Uses PostgreSQL-specific syntax (IF NOT EXISTS, ALTER COLUMN).
     """
     from sqlalchemy import text
     results = []

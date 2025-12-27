@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
+from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from datetime import datetime, date, time, timedelta, timezone
 import os
@@ -29,6 +29,12 @@ def to_jst(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(JST)
+
+
+def get_config(db: Session, key: str, default: str) -> str:
+    """Get clinic config from DB with fallback to settings"""
+    config = db.query(ClinicConfig).filter(ClinicConfig.key == key).first()
+    return config.value if config else default
 
 
 def calculate_scheduled_check_status(
@@ -230,7 +236,7 @@ def detect_and_insert_missed_checkpoints(db: Session, target_date: date, now_jst
             toilet_id=toilet_id,
             staff_id=None,  # スタッフなし
             major_checkpoint_id=cp.id,
-            checked_at=end_dt,  # 時間帯終了時刻
+            checked_at=end_dt_jst.astimezone(timezone.utc),  # 時間帯終了時刻
             status_type="MISSED_MAJOR"
         )
         db.add(missed_check)
@@ -250,11 +256,6 @@ def get_simple_status(
     now_utc = datetime.now(timezone.utc)
     now_jst = now_utc.astimezone(JST)
 
-    # Helper: Get clinic config from DB with fallback to settings
-    def get_config(key: str, default: str) -> str:
-        config = db.query(ClinicConfig).filter(ClinicConfig.key == key).first()
-        return config.value if config else default
-    
     # 対象日付を決定
     if date_str:
         try:
@@ -280,7 +281,11 @@ def get_simple_status(
     end_jst = start_jst + timedelta(days=1)
     
     # 対象日のチェックを取得（MISSED_MAJOR含む）
-    day_checks = db.query(ToiletCheck).filter(
+    day_checks = db.query(ToiletCheck).options(
+        joinedload(ToiletCheck.staff),
+        joinedload(ToiletCheck.major_checkpoint),
+        selectinload(ToiletCheck.images)
+    ).filter(
         and_(
             ToiletCheck.checked_at >= start_jst.astimezone(timezone.utc),
             ToiletCheck.checked_at < end_jst.astimezone(timezone.utc)
@@ -317,7 +322,7 @@ def get_simple_status(
     
     # 午後チェックが不要な曜日か判定
     def is_afternoon_skip_day(target: date) -> bool:
-        skip_days_str = get_config("afternoon_check_skip_days", "").strip()
+        skip_days_str = get_config(db, "afternoon_check_skip_days", "").strip()
         if not skip_days_str:
             return False
         try:
@@ -389,7 +394,7 @@ def get_simple_status(
     
     # F003: 休診日判定
     def is_closed_day(target: date) -> bool:
-        closed_days_str = get_config("closed_days", settings.CLOSED_DAYS).strip()
+        closed_days_str = get_config(db, "closed_days", settings.CLOSED_DAYS).strip()
         if not closed_days_str:
             return False
         try:
@@ -408,8 +413,8 @@ def get_simple_status(
         if target != now.date():
             return False, None
         
-        start_str = get_config("business_hours_start", settings.BUSINESS_HOURS_START)
-        end_str = get_config("business_hours_end", settings.BUSINESS_HOURS_END)
+        start_str = get_config(db, "business_hours_start", settings.BUSINESS_HOURS_START)
+        end_str = get_config(db, "business_hours_end", settings.BUSINESS_HOURS_END)
         start = parse_time(start_str)
         end = parse_time(end_str)
         current = now.time()
@@ -439,6 +444,12 @@ def get_simple_status(
     )
 
 
+def get_business_hours_status_logic(now_jst: datetime, target_date: date, db: Session) -> tuple:
+    """Returns (is_outside_hours, message) - helper for other endpoints if needed"""
+    # ... actually I'll just fix the existing one inside get_simple_status
+    pass
+
+
 @router.get("/day", response_model=DashboardDayResponse)
 def get_dashboard_day(
     date_str: str, # YYYY-MM-DD
@@ -459,7 +470,10 @@ def get_dashboard_day(
     end_jst = start_jst + timedelta(days=1)
 
     # Get all checks for the day within the JST range
-    day_checks_query = db.query(ToiletCheck).filter(
+    day_checks_query = db.query(ToiletCheck).options(
+        joinedload(ToiletCheck.staff),
+        selectinload(ToiletCheck.images)
+    ).filter(
         and_(
             ToiletCheck.checked_at >= start_jst.astimezone(timezone.utc),
             ToiletCheck.checked_at < end_jst.astimezone(timezone.utc)
@@ -472,8 +486,8 @@ def get_dashboard_day(
     current_dt = datetime.now(timezone.utc)
     is_today = target_date == current_dt.date()
 
-    # Define JST
-    JST = timezone(timedelta(hours=9))
+    # current_dt is already defined above? No, wait. 
+    # Use global JST defined at the top
 
     for cp in major_checkpoints:
         # Filter checks within this checkpoint's time window

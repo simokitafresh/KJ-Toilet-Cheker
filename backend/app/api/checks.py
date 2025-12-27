@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, and_
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import os
@@ -13,6 +13,9 @@ from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# JST timezone
+JST = timezone(timedelta(hours=9))
 
 @router.post("/", response_model=CheckResponse)
 def create_check(
@@ -145,8 +148,15 @@ def get_checks(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
+    # 対象日の開始と終了（JST）をUTCに変換して範囲指定で取得
+    start_jst = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=JST)
+    end_jst = start_jst + timedelta(days=1)
+
     query = db.query(ToiletCheck).filter(
-        func.date(ToiletCheck.checked_at) == target_date
+        and_(
+            ToiletCheck.checked_at >= start_jst.astimezone(timezone.utc),
+            ToiletCheck.checked_at < end_jst.astimezone(timezone.utc)
+        )
     )
 
     if toilet_id:
