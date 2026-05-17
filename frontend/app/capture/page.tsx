@@ -6,6 +6,21 @@ import { Staff, Toilet } from '@/lib/types';
 import { AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+    let lastErr: unknown;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (err) {
+            lastErr = err;
+            if (i < maxRetries - 1) {
+                await new Promise(res => setTimeout(res, 800 * (i + 1)));
+            }
+        }
+    }
+    throw lastErr;
+}
+
 export default function CapturePage() {
     const router = useRouter();
     const [step, setStep] = useState<'camera' | 'staff'>('camera');
@@ -37,7 +52,7 @@ export default function CapturePage() {
                 };
             }
         } catch {
-            setCameraError('カメラを起動できませんでした。カメラへのアクセスを許可してください。');
+            setCameraError('カメラを起動できませんでした。カメラへのアクセスを許可してください。下のボタンで再試行するか、画面を下に引いてリロードしてください。');
         }
     }, []);
 
@@ -52,7 +67,7 @@ export default function CapturePage() {
 
     useEffect(() => {
         // マスターデータの読み込み
-        Promise.all([api.getStaff(), api.getToilets()])
+        Promise.all([withRetry(() => api.getStaff()), withRetry(() => api.getToilets())])
             .then(([staffData, toiletData]) => {
                 setStaffList(staffData);
                 setToilets(toiletData);
@@ -60,7 +75,7 @@ export default function CapturePage() {
                     setSelectedToiletId(toiletData[0].id);
                 }
             })
-            .catch(() => setError('データの読み込みに失敗しました'));
+            .catch(() => setError('データの読み込みに失敗しました。画面を下に引いてリロードするか、しばらく待ってから再試行してください。'));
     }, []);
 
     // カメラステップの時にカメラを起動
